@@ -52,19 +52,19 @@ beforeEach(() => {
 const basic = () => split('row', [group(['sessions']), group(['workspace'])])
 
 describe('onboarding assembly dismisses panes it never asked for', () => {
-  // The bots plugin registers Cronjobs the moment its roster becomes VISIBLE,
-  // and assembly fronts that roster — so the pane is a consequence of the
+  // Contributed panes can register the moment a pane becomes VISIBLE, and
+  // assembly fronts the sidebar face — so such a pane is a consequence of the
   // assembly, not a precondition of it. A sweep that ran before the fronting
   // saw a tree the pane could not be in yet, and Basic landed with an empty
   // Cronjobs column beside the chat (twice).
-  it('drops a main pane that only registers once the bots roster is fronted', () => {
+  it('drops a main pane that only registers once the sidebar face is fronted', () => {
     let cronjobs: (() => void) | null = null
 
     // What the app root does (`watchContributedPanes`) — without it a late
     // registration never reaches the tree and the test proves nothing.
     const stopAdopting = registry.subscribe(adoptContributedPanes)
 
-    const stop = $paneVisible(BOTS_PANE).listen(visible => {
+    const stop = $paneVisible('sessions').listen(visible => {
       if (visible) {
         cronjobs ??= registerPane('hermes-bots:routines', {
           dock: { enforce: true, pane: 'workspace', pos: 'right' },
@@ -77,7 +77,7 @@ describe('onboarding assembly dismisses panes it never asked for', () => {
     try {
       assembleChatOnboarding('basic', basic())
 
-      expect(cronjobs, 'the roster never fronted, so this asserts nothing').not.toBeNull()
+      expect(cronjobs, 'the face never fronted, so this asserts nothing').not.toBeNull()
       expect(allPaneIds($layoutTree.get()!)).not.toContain('hermes-bots:routines')
     } finally {
       stop()
@@ -137,21 +137,25 @@ describe('picking a different layout replaces the previous one', () => {
   // A pick is a request for the layout as a whole, tab included. Fronting
   // only on the first pick rebuilt Basic's panes on the way back but left the
   // sidebar showing whatever Elite had.
-  it('fronts the roster again on the way back', () => {
+  it('fronts Sessions again on the way back', () => {
     assembleChatOnboarding('basic', basic())
     assembleChatOnboarding('terminal-deck', elite())
     assembleChatOnboarding('basic', basic())
 
-    expect(findGroupOfPane($layoutTree.get()!, BOTS_PANE)?.active).toBe(BOTS_PANE)
+    expect(findGroupOfPane($layoutTree.get()!, 'sessions')?.active).toBe('sessions')
   })
 
-  // The sidebar's face follows the same rule that decides where the first
-  // build lands: Elite is heading for a session, Basic for a bot.
-  it('opens Elite on Sessions and Basic on the roster', () => {
+  // EVERY pick opens on Sessions: the Setup guide's chat is a visible
+  // Sessions row, and fronting the bot roster on a Basic pick navigated the
+  // user away from the conversation they were mid-sentence in (they had to
+  // click back to Sessions to recover it). The roster's moment is the
+  // bot-surface handoff, not the layout pick.
+  it('opens both Elite and Basic on Sessions', () => {
     assembleChatOnboarding('terminal-deck', elite())
     expect(findGroupOfPane($layoutTree.get()!, 'sessions')?.active).toBe('sessions')
 
     assembleChatOnboarding('basic', basic())
-    expect(findGroupOfPane($layoutTree.get()!, BOTS_PANE)?.active).toBe(BOTS_PANE)
+    expect(findGroupOfPane($layoutTree.get()!, 'sessions')?.active).toBe('sessions')
+    expect(findGroupOfPane($layoutTree.get()!, BOTS_PANE)?.active ?? null).not.toBe(BOTS_PANE)
   })
 })
