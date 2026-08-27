@@ -2983,14 +2983,8 @@ export const en: Translations = {
     addToChat: 'Add to chat'
   },
 
-  // Pen canvas (pen.dev) — the in-app design canvas.
   pen: {
-    tab: 'Canvas',
-    loadFailed: 'CANVAS FAILED TO LOAD',
-    openFailed: 'Could not open the canvas',
-    newCanvas: 'New canvas',
-    openCanvasFile: 'Open .pen file…',
-    notInstalled: 'pen.dev is not installed — get it at pen.dev/download'
+    openFailed: 'Could not open the canvas'
   },
 
   preview: {

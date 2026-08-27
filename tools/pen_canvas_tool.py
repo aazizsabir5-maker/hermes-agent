@@ -23,6 +23,7 @@ import os
 import time
 from typing import Any, Callable, Optional
 
+from hermes_constants import get_hermes_home
 from tools.registry import registry, tool_error
 
 # Pen results are design-document JSON — schemas, node trees, guideline text.
@@ -35,9 +36,7 @@ _BASE64_MATERIALIZE_THRESHOLD = 4_096
 
 
 def _screenshot_dir() -> str:
-    root = os.path.join(
-        os.path.expanduser(os.environ.get("HERMES_HOME", "~/.hermes")), "pen_canvas"
-    )
+    root = os.path.join(str(get_hermes_home()), "pen_canvas")
     os.makedirs(root, exist_ok=True)
     return root
 

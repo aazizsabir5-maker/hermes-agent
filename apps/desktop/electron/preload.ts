@@ -161,8 +161,6 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
     }
   },
   getBootProgress: () => ipcRenderer.invoke('hermes:boot-progress:get'),
-  // Pen canvas: main embeds app.pen.dev in a layout pane. The renderer gets
-  // status, open/close, the agent tool proxy, and a host-event feed.
   pen: {
     status: () => ipcRenderer.invoke('hermes:pen:status'),
     open: options => ipcRenderer.invoke('hermes:pen:open', options),

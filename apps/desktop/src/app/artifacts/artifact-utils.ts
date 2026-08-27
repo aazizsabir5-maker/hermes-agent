@@ -196,10 +196,6 @@ export async function artifactImageSrc(value: string): Promise<string> {
   return resolveMediaDisplaySrc(value)
 }
 
-/** The pen canvas library as artifact records. Canvases ARE artifacts — they
- *  just come from the filesystem library (~/.hermes/pens) instead of being
- *  mined out of session transcripts, and each carries its session tie so the
- *  "open chat" affordance works like any transcript-mined artifact. */
 export async function loadCanvasArtifacts(): Promise<ArtifactRecord[]> {
   const pen = window.hermesDesktop?.pen
 
@@ -216,7 +212,6 @@ export async function loadCanvasArtifacts(): Promise<ArtifactRecord[]> {
       value: item.path,
       href: item.path,
       label: item.name,
-      // The preview PNG rides in preview: the grid shows the real canvas.
       preview: item.previewPath,
       sessionId: item.sessionId ?? '',
       sessionTitle: item.name,

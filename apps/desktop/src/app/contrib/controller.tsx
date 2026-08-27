@@ -378,9 +378,6 @@ registry.registerMany([
       run: () => void runImportProfileFlow()
     } satisfies PaletteContribution
   },
-  // Pen canvas (pen.dev): the in-app design canvas. Blank canvas straight in;
-  // the file variant opens a native picker (palette closing on select is
-  // correct for both — the canvas tab takes the stage).
   {
     id: 'pen.newCanvas',
     area: PALETTE_AREA,
@@ -414,9 +411,6 @@ registry.registerMany([
           })
     } satisfies PaletteContribution
   },
-  // The canvas library (~/.hermes/pens): every canvas the user has, browsable
-  // and reopenable by name. Registered as a dynamic provider so the rows ARE
-  // the canvases rather than a submenu that lists them.
   {
     id: 'pen.library',
     area: PALETTE_AREA,
@@ -522,12 +516,7 @@ watchSessionTiles()
 watchRouteTiles()
 watchPreviewTiles()
 
-// Canvas panes: mirror open design surfaces (pen, future providers) into
-// layout-tree tiles.
 watchCanvasTiles()
-
-// A canvas belongs to a SESSION: restore the active session's canvas on
-// launch, and swap it when the user switches chats.
 watchPenSession()
 
 // Composer pop-out state is keyed by layout zone, so drop entries for zones the
@@ -970,7 +959,6 @@ export function ContribController() {
           {/* "Close running tab?" — the busy/input-blocked tile close gate. */}
           <SessionTileCloseConfirm />
 
-          {/* The canvas library (~/.hermes/pens) — browse/reopen/delete. */}
           <PenLibraryDialog onOpenChange={(open: boolean) => $penLibraryOpen.set(open)} open={penLibraryOpen} />
 
           {/* The REAL statusbar (model pill, command center, agents, …) with

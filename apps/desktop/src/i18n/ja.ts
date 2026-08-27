@@ -2621,12 +2621,7 @@ export const ja = defineLocale({
   },
 
   pen: {
-    tab: 'キャンバス',
-    loadFailed: 'キャンバスの読み込みに失敗しました',
-    openFailed: 'キャンバスを開けませんでした',
-    newCanvas: '新しいキャンバス',
-    openCanvasFile: '.pen ファイルを開く…',
-    notInstalled: 'pen.dev がインストールされていません — pen.dev/download から入手してください'
+    openFailed: 'キャンバスを開けませんでした'
   },
 
   preview: {

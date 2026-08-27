@@ -14,17 +14,6 @@ interface PenLibraryDialogProps {
   open: boolean
 }
 
-/**
- * The canvas library — every .pen in `~/.hermes/pens`, browsable by name.
- *
- * Canvases are files, not sessions, so this is deliberately the same cmdk
- * surface as the session picker rather than a new kind of window: type to
- * filter, Enter to open. Row actions cover the rest of "manage them" —
- * delete (with an inline are-you-sure, no second dialog) and reveal in Finder.
- *
- * The open canvas is flagged and can't be deleted from under itself; main
- * closes the document before removing files either way.
- */
 export function PenLibraryDialog({ onOpenChange, open }: PenLibraryDialogProps) {
   const { t } = useI18n()
   const [search, setSearch] = useState('')
@@ -82,9 +71,6 @@ export function PenLibraryDialog({ onOpenChange, open }: PenLibraryDialogProps) 
                       }}
                       value={`${item.name} ${item.path}`}
                     >
-                      {/* Real canvas thumbnail when the editor has pushed one
-                          (preview.png beside the .pen); pencil glyph until
-                          the first save renders it. */}
                       {item.previewPath ? (
                         <img
                           alt=""
@@ -95,9 +81,6 @@ export function PenLibraryDialog({ onOpenChange, open }: PenLibraryDialogProps) 
                         <Pencil className="size-4 shrink-0 text-muted-foreground" />
                       )}
                       <span className="min-w-0 flex-1 truncate">{item.name}</span>
-                      {/* Chat-tied canvas: this file belongs to a conversation
-                          and comes back with it. The glyph makes per-session
-                          ownership visible in the browser itself. */}
                       {item.sessionId && (
                         <MessageCircle className="size-3.5 shrink-0 text-muted-foreground/70" />
                       )}

@@ -4,22 +4,8 @@ import { type ComposerSuggestion, offerSuggestions, registerDraftProvider } from
 import { openPenCanvas, refreshPenStatus } from '@/store/pen'
 import { $activeSessionId, $selectedStoredSessionId } from '@/store/session'
 
-/**
- * Pen canvas draft provider: the draft talks about designing on a canvas, so
- * offer to slide the pen.dev drawer out — a fresh canvas, or one of their
- * .pen files via the native picker. Both are one-click-does-the-whole-thing
- * (side-effecting) pills per the suggestion contract.
- *
- * Self-limiting: only offers while no canvas is already open (the pane on
- * screen means the suggestion is done), and only on completed whole-word
- * triggers. Ambiguous words ("design", "draw") get no bare keyword — coding
- * chats are full of design docs and design systems.
- */
-
 const STATUS_TTL_MS = 30_000
 
-// Whole words that mean "I want a canvas". Deliberately narrow; "pen" alone
-// is a writing implement, "design" alone is a document.
 const KEYWORDS = ['canvas', 'pencil', 'pen.dev', 'mockup', 'mock-up', 'wireframe']
 
 let statusAt = 0
@@ -38,9 +24,7 @@ async function penUsable(): Promise<boolean> {
   return statusUsable
 }
 
-/** Whole-word, completed-word trigger test, exported for tests. A hit only
- *  counts when at least one character follows the match — the debounce firing
- *  mid-word under the caret is not intent. */
+/** Whole-word hit only when something follows the match (debounce mid-word is not intent). */
 export function penTrigger(text: string): null | string {
   const haystack = text.toLowerCase()
 
@@ -131,17 +115,6 @@ registerDraftProvider('pen', async ({ text }) => {
   return wantsExisting ? [openFileSuggestion(), newCanvasSuggestion()] : [newCanvasSuggestion(), openFileSuggestion()]
 })
 
-/**
- * Reopen pill — the session HAS a canvas and it isn't on screen.
- *
- * This one is an EVENT offering, not a draft one: it's a fact about session
- * state, not something to infer from what's being typed. A canvas you already
- * made for this chat should be one click away without having to describe it
- * again — that's the whole point of tying it to the session.
- *
- * Self-limiting by construction: withdrawn the moment the canvas is open
- * (offer []), so it can't sit there duplicating what's already visible.
- */
 function reopenSuggestion(name: string, minedPath: null | string = null): ComposerSuggestion {
   return {
     doneLabel: copy('done'),
@@ -153,9 +126,6 @@ function reopenSuggestion(name: string, minedPath: null | string = null): Compos
         return
       }
 
-      // A mined (transcript-recovered) canvas has no tie entry to restore —
-      // open it by path instead, which records a FRESH tie so the store is
-      // healed for every future launch.
       const restored = minedPath
         ? await openPenCanvas({ path: minedPath }, sessionId)
         : await (await import('@/store/pen')).restorePenCanvas(sessionId)
@@ -174,19 +144,7 @@ function reopenSuggestion(name: string, minedPath: null | string = null): Compos
   }
 }
 
-/** Transcript fallback: the SESSION ITSELF is the durable record of its
- *  canvases — pen tool results and chat text carry the .pen paths (that is
- *  exactly how the Artifacts page ties pens to chats). The side tie-store is
- *  a fast cache that has already missed once (draft-chat hole); when it has
- *  no answer, mine the transcript.
- *
- *  Direction matters: we search the transcript FOR each library path, never
- *  extract path-shaped strings FROM the transcript. Real canvas names carry
- *  spaces ("Untitled 8.pen") and appear percent-encoded in file:// URIs —
- *  both defeat forward extraction (found empirically: a session whose
- *  transcript mentioned its canvas twice matched neither form). Matching
- *  known library paths in both raw and URI-encoded shapes is immune to
- *  either, and only ever offers files that still exist. */
+/** Search the transcript for known library paths (raw + URI-encoded). Don't extract paths from text. */
 async function canvasPathFromTranscript(sessionId: string): Promise<null | string> {
   try {
     const [{ messages }, library] = await Promise.all([
@@ -200,7 +158,6 @@ async function canvasPathFromTranscript(sessionId: string): Promise<null | strin
       return null
     }
 
-    // Each library canvas, with every spelling a transcript might contain.
     const needles = items.map(item => ({
       path: item.path,
       forms: [item.path, encodeURI(item.path)]
@@ -241,14 +198,7 @@ async function canvasPathFromTranscript(sessionId: string): Promise<null | strin
   return null
 }
 
-/** The bus keys offerings by the COMPOSER'S session id, and the composer
- *  wears a different identity than the route when a session has been
- *  compacted/rotated: the route (and this refresh) speaks the durable stored
- *  id, the live tile's strip reads under the tip id. Proven live: a pill
- *  offered under the stored id sat invisible while the identical pill under
- *  the tile id rendered instantly. Publish to every identity the
- *  conversation currently wears — the strip dedupes by provider:id, so the
- *  double write can never double-render. */
+/** Offer under stored id and live tile id — compacted sessions wear both. */
 function pillTargets(sessionId: string): string[] {
   const targets = new Set([sessionId])
 
@@ -263,8 +213,6 @@ function pillTargets(sessionId: string): string[] {
   return [...targets]
 }
 
-/** Re-evaluate the reopen pill for the active session. Called on session
- *  switch and whenever a canvas opens or closes. */
 export async function refreshPenSessionSuggestion(sessionId: null | string): Promise<void> {
   const pen = window.hermesDesktop?.pen
 
@@ -283,15 +231,12 @@ export async function refreshPenSessionSuggestion(sessionId: null | string): Pro
     }
   }
 
-  // Its canvas is already on screen — nothing to offer.
   if ((status?.openDocuments.length ?? 0) > 0) {
     offerAll([])
 
     return
   }
 
-  // Tie store first (fast, covers the normal case), transcript second (the
-  // durable record — catches canvases the store missed).
   let path = entry?.path ?? null
 
   if (!entry) {

@@ -492,8 +492,6 @@ function ArtifactImageCard({ artifact, failedImage, onImageError, onOpenChat }: 
     let active = true
 
     setSrc('')
-    // A canvas without a preview yet (never saved) keeps the empty media box —
-    // the record is still openable.
     void artifactImageSrc(isCanvas ? (artifact.preview ?? '') : artifact.value)
       .then(nextSrc => {
         if (active) {

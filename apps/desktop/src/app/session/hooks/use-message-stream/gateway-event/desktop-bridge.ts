@@ -169,9 +169,6 @@ export function handleDesktopBridgeEvent(ctx: GatewayEventContext): boolean {
   }
 
   if (event.type === 'pen.tool.request') {
-    // pen_canvas tool: run a pen.dev design operation. 'open' opens (or
-    // re-fronts) a Canvas tab; everything else goes to the live canvas over
-    // the embed bridge. Empty text = unavailable.
     const requestId = typeof payload?.request_id === 'string' ? payload.request_id : ''
 
     if (requestId) {
@@ -184,21 +181,13 @@ export function handleDesktopBridgeEvent(ctx: GatewayEventContext): boolean {
           text: result ? JSON.stringify(result) : ''
         })
 
-      // `open` and `close` are HOST actions (they own the drawer), not pen
-      // MCP operations — everything else passes through to the editor.
       const run =
         action === 'open'
           ? openPenCanvas(
               {
-                // The agent names the canvas from its design brief — the same
-                // "derive from the opening intent" stage sessions use for
-                // instant titles. No name = Untitled N.
                 name: typeof args.name === 'string' ? args.name : undefined,
-                path: typeof args.path === 'string' ? args.path : undefined,
-                template: typeof args.template === 'string' ? args.template : undefined
+                path: typeof args.path === 'string' ? args.path : undefined
               },
-              // The route's session — the chat this agent is designing in. The
-              // selected atom is null in a draft; this never is.
               sessionId
             ).then(doc =>
               doc ? { success: true, result: { docId: doc.docId, fileURI: doc.fileURI || null } } : null

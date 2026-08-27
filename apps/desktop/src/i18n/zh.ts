@@ -3148,12 +3148,7 @@ export const zh: Translations = {
   },
 
   pen: {
-    tab: '画布',
-    loadFailed: '画布加载失败',
-    openFailed: '无法打开画布',
-    newCanvas: '新建画布',
-    openCanvasFile: '打开 .pen 文件…',
-    notInstalled: '未安装 pen.dev — 请前往 pen.dev/download 获取'
+    openFailed: '无法打开画布'
   },
 
   preview: {

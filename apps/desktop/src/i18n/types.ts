@@ -2550,12 +2550,7 @@ export interface Translations {
   }
 
   pen: {
-    tab: string
-    loadFailed: string
     openFailed: string
-    newCanvas: string
-    openCanvasFile: string
-    notInstalled: string
   }
 
   preview: {

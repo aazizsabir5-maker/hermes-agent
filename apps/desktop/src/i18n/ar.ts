@@ -2325,12 +2325,7 @@ export const ar = defineLocale({
   },
 
   pen: {
-    tab: 'اللوحة',
-    loadFailed: 'فشل تحميل اللوحة',
-    openFailed: 'تعذّر فتح اللوحة',
-    newCanvas: 'لوحة جديدة',
-    openCanvasFile: 'فتح ملف ‎.pen…',
-    notInstalled: 'pen.dev غير مثبّت — احصل عليه من pen.dev/download'
+    openFailed: 'تعذّر فتح اللوحة'
   },
   preview: {
     tab: 'معاينة',
