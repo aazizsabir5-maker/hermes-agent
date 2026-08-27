@@ -173,7 +173,7 @@ class Store:
 
     def __init__(self):
         self.lock = threading.RLock()
-        self._file_lock = open(STATE_PATH + '.lock', 'a+')
+        self._file_lock = open(STATE_PATH + '.lock', 'a+', encoding='utf-8')
 
     def load(self):
         try:
