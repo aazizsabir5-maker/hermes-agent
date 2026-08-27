@@ -196,7 +196,17 @@ lose to the UNIQUE index and fall to the auto-titler.
 The first-run frame: floating panes (user/plugin panels) stay hidden while
 solo AND while the active session is any onboarding thread (Setup's chat,
 then a bot-surface first build); the composer's git strip is dropped on those
-threads too. At assembly the sidebar fronts the BOTS tab — the Sessions list
+threads too. Message-level chrome is suppressed by design as well: the
+assistant action bar (branch-in-new-chat / copy / read-aloud / regenerate,
+plus the reaction slot) and the turn-duration stamp are hidden on onboarding
+threads via the `[data-thread-type='onboarding']` transcript hook in
+styles.css — regenerate would re-roll a turn whose `::onboarding{…}` card the
+step machine already consumed, and branching forks the user out of the
+canonical guided thread. Known caveat: `$chatOnboardingThreadIds` only holds
+session ids seen this app-run, so a relaunch mid-onboarding rehydrates
+Setup's chat without the marker and the chrome returns; extending the id set
+from the kickoff's adopt path is deliberate follow-up work. At assembly the
+sidebar fronts the BOTS tab — the Sessions list
 is empty at that moment (Setup's chat is a hidden bot canonical), so the
 roster is the first face of the nav.
 

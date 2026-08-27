@@ -1003,9 +1003,18 @@
 
 /* The guided-onboarding thread is marked with [data-thread-type='onboarding']
    (see ThreadMessageList) — the hook for onboarding-only transcript styling.
-   No overrides right now; to scale it up, `zoom: calc(16 / 14)` here reads the
-   14px body at ~16px (zoom, not font-size: transcript type is rem-based, and
-   zoom scales the onboarding cards' controls with the text). */
+   (To scale it up, `zoom: calc(16 / 14)` here reads the 14px body at ~16px —
+   zoom, not font-size: transcript type is rem-based, and zoom scales the
+   onboarding cards' controls with the text.) */
+
+/* Guided chat is a conversation, not a work surface: hide per-message action
+   chrome (branch/copy/read-aloud/regenerate bar, reaction slot) and the turn-
+   duration stamp — regenerate/branch would derail the scripted flow. */
+[data-thread-type='onboarding'] [data-slot='aui_msg-actions'],
+[data-thread-type='onboarding'] [data-slot='aui_msg-reactions'],
+[data-thread-type='onboarding'] [data-slot='aui_turn-duration'] {
+  display: none;
+}
 
 /* In-chat onboarding assembly: panes snap into the grown window with a
    stagger — the "magic lego" arrival (see onboarding-chat/assembly.ts). */
