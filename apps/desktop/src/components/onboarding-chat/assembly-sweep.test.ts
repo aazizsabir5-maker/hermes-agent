@@ -7,7 +7,8 @@ import {
   $layoutTree,
   $paneVisible,
   adoptContributedPanes,
-  bindToolPaneCollapse
+  bindToolPaneCollapse,
+  tabStripVisibleForGroup
 } from '@/components/pane-shell/tree/store'
 import { registry } from '@/contrib/registry'
 
@@ -93,6 +94,23 @@ describe('onboarding assembly dismisses panes it never asked for', () => {
     expect(placed).toContain('workspace')
     expect(placed).toContain('sessions')
   })
+
+  // The Bots roster docks onto `sessions` with `enforce: true`, so adoption
+  // re-homes it there on every pick. Onboarding shows no bot surface at all —
+  // and a second pane in the left zone is also what conjures a tab strip over
+  // what should read as a plain sessions sidebar.
+  it('leaves the sessions sidebar alone, whichever layout is picked', () => {
+    for (const [id, tree] of [
+      ['basic', basic()],
+      ['terminal-deck', split('row', [group(['sessions']), group(['workspace']), group(['files'])])]
+    ] as const) {
+      assembleChatOnboarding(id, tree)
+
+      expect(allPaneIds($layoutTree.get()!)).not.toContain(BOTS_PANE)
+      expect(findGroupOfPane($layoutTree.get()!, 'sessions')?.panes).toEqual(['sessions'])
+      expect(tabStripVisibleForGroup(findGroupOfPane($layoutTree.get()!, 'sessions')!)).toBe(false)
+    }
+  })
 })
 
 // Layouts are re-pickable from the card, and everything assembly writes
@@ -146,16 +164,14 @@ describe('picking a different layout replaces the previous one', () => {
   })
 
   // EVERY pick opens on Sessions: the Setup guide's chat is a visible
-  // Sessions row, and fronting the bot roster on a Basic pick navigated the
-  // user away from the conversation they were mid-sentence in (they had to
-  // click back to Sessions to recover it). The roster's moment is the
-  // bot-surface handoff, not the layout pick.
+  // Sessions row, and fronting anything else navigated the user away from the
+  // conversation they were mid-sentence in (they had to click back to
+  // Sessions to recover it).
   it('opens both Elite and Basic on Sessions', () => {
     assembleChatOnboarding('terminal-deck', elite())
     expect(findGroupOfPane($layoutTree.get()!, 'sessions')?.active).toBe('sessions')
 
     assembleChatOnboarding('basic', basic())
     expect(findGroupOfPane($layoutTree.get()!, 'sessions')?.active).toBe('sessions')
-    expect(findGroupOfPane($layoutTree.get()!, BOTS_PANE)?.active ?? null).not.toBe(BOTS_PANE)
   })
 })

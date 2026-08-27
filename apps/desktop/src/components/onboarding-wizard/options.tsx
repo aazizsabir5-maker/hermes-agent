@@ -43,7 +43,8 @@ export const accentsFor = (dark: boolean): Array<{ hex: string; name: string }> 
   { hex: NOUS_ACCENT, name: 'Nous blue' },
   { hex: '#8a2be2', name: 'Ultraviolet' },
   { hex: '#e0218a', name: 'Barbie pink' },
-  { hex: '#ff073a', name: 'Electric red' }
+  { hex: '#ff073a', name: 'Electric red' },
+  { hex: '#ff6a00', name: 'Safety orange' }
 ]
 
 export function AccentSwatch({
@@ -84,8 +85,7 @@ export function AccentSwatch({
 export type MiniNode = number | { dir: 'column' | 'row'; children: MiniNode[]; weights: number[] }
 
 /** The power-user layout. Picking it is the most explicit thing a user does
- *  in the whole first run to say how they work, so it also decides where
- *  their first build lands (see `defaultHandoffSurface`). */
+ *  in the whole first run to say how they work. */
 export const ELITE_LAYOUT_ID = 'terminal-deck'
 
 export const LAYOUTS: Array<{ id: string; name: string; tree: MiniNode }> = [

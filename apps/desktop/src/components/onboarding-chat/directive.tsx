@@ -22,14 +22,11 @@ import { $chatLayoutPicked, assembleChatOnboarding } from '@/components/onboardi
 import { rememberOnboardingSubmit } from '@/components/onboarding-chat/retry'
 import {
   $setupHandoff,
-  defaultHandoffSurface,
-  type HandoffSurface,
+  firstTaskTitle,
   hasCompletedSetupHandoff,
   parseHandoffPlan,
-  parseHandoffSurface,
-  requestSetupHandoff,
-  taskBotTitle
-} from '@/components/onboarding-chat/setup-bot'
+  requestSetupHandoff
+} from '@/components/onboarding-chat/setup-profile'
 import {
   accentsFor,
   AccentSwatch,
@@ -424,27 +421,29 @@ function FirstBuildCard({ attrs, locked = false }: CardProps & { attrs: Record<s
   )
 }
 
-const HANDOFF_SURFACE_LABELS: Record<HandoffSurface, string> = {
-  bot: 'Give it its own agent',
-  session: 'Open it as a session'
-}
-
 /**
  * The handoff card — where the first build leaves this chat. Setup emits
- * `::onboarding{step="handoff" task="…" brief="…" surface="…"}` once the task
- * is decided, and the card asks the one question the conversation can't
- * answer for the user: should this be a standing agent or a plain session?
- * Setup's `surface` is the proposal (from everything they've said) and leads;
- * the other option sits beside it. The pick raises the handoff beacon and the
- * wiring effect does the real work — mint or not, seed, move the user there.
- * After that the card just narrates: spinning up → built. Both latches (atom
- * + storage) make re-parses, re-mounts, and relaunches inert.
+ * `::onboarding{step="handoff" task="…" brief="…"}` once the task is decided,
+ * and the card performs it: raise the beacon, and the wiring effect opens a
+ * session on the user's default profile, seeds it, and moves the user there.
+ *
+ * Nothing to ask. The build's shape was settled by the `first` step; the only
+ * remaining question used to be agent-vs-session, and there is one surface
+ * now. So the card narrates: opening → landed. Both latches (atom + storage)
+ * make re-parses, re-mounts, and relaunches inert, and a locked (replayed)
+ * transcript never re-fires.
  */
 function HandoffCard({ attrs, locked = false }: CardProps & { attrs: Record<string, string> }) {
   const task = (attrs.task ?? '').trim().slice(0, 60)
   const brief = (attrs.brief ?? '').trim().slice(0, 240)
-  const answers = useStore($wizardAnswers)
+  const plan = parseHandoffPlan(attrs.plan)
   const state = useStore($setupHandoff)
+
+  useEffect(() => {
+    if (task && brief && !locked) {
+      requestSetupHandoff(task, brief, plan)
+    }
+  }, [brief, locked, plan, task])
 
   if (!task || !brief) {
     return null
@@ -452,36 +451,7 @@ function HandoffCard({ attrs, locked = false }: CardProps & { attrs: Record<stri
 
   const settled = state?.phase === 'done' || (state === null && hasCompletedSetupHandoff())
   const failed = state?.phase === 'error'
-  const title = state?.botTitle ?? taskBotTitle(task)
-
-  // Unanswered: the user hasn't chosen yet and nothing has run. A locked
-  // (replayed) transcript never re-asks — it falls through to the narration.
-  if (!state && !settled && !locked) {
-    // Setup's proposal leads; when it omits the attr the layout pick — the
-    // same rule Setup was given — answers instead.
-    const suggested = parseHandoffSurface(attrs.surface) ?? defaultHandoffSurface(answers.layout)
-    const order: HandoffSurface[] = suggested === 'session' ? ['session', 'bot'] : ['bot', 'session']
-    const plan = parseHandoffPlan(attrs.plan)
-
-    return (
-      <div className="my-3 grid min-w-0 max-w-md gap-2" data-onboarding-card>
-        <span className="text-sm text-(--ui-text-secondary)">How should we run it?</span>
-        <div className="flex min-w-0 max-w-full flex-wrap gap-2">
-          {order.map(surface => (
-            <Chip
-              key={surface}
-              label={HANDOFF_SURFACE_LABELS[surface]}
-              on={false}
-              onToggle={() => void requestSetupHandoff(task, brief, surface, plan)}
-              variant="pill"
-            />
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  const asSession = state?.surface === 'session'
+  const title = state?.sessionTitle ?? firstTaskTitle(task)
 
   return (
     <div className="my-3 flex max-w-md items-center gap-2 text-sm" data-onboarding-card>
@@ -496,10 +466,8 @@ function HandoffCard({ attrs, locked = false }: CardProps & { attrs: Record<stri
         {failed
           ? 'Couldn\u2019t open it separately — building here instead'
           : settled
-            ? asSession
-              ? `${title} is on it — find it in your sessions`
-              : `${title} is on it — find it in your agents`
-            : `Spinning up ${title}\u2026`}
+            ? `${title} is on it — find it in your sessions`
+            : `Opening ${title}\u2026`}
       </span>
     </div>
   )
@@ -566,7 +534,7 @@ const $firstScreenBuiltConfig = atom<null | ReturnType<typeof compileFirstScreen
  *  triggered React's cross-component setState warning and re-entrant
  *  renders (live desktop.log). */
 function DataDirective({ step, value }: { step: 'context' | 'name' | 'working'; value: string }) {
-  // 'working' is the setup-bot flow's name for the context answer — same
+  // 'working' is the guided flow's name for the context answer — same
   // storage, same downstream consumers (task options, any artifact build).
   const field = step === 'working' ? 'context' : step
 

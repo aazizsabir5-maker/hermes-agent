@@ -463,10 +463,11 @@ export function useSessionActions({
     async (
       preview: string | null = null,
       seedMessages?: { content: string; display_kind?: 'hidden'; role: 'assistant' | 'user' }[],
-      // Bot-mode onboarding: mint the session as a titled/hidden canonical
-      // chat (e.g. "Bot Chat"). The owning profile is NOT an override — point
-      // $newChatProfile at it first (selectProfile-style) so the create lands
-      // on that profile's own backend and every later ambient RPC follows.
+      // Create the session titled/hidden/on a pinned model (guided onboarding
+      // mints its welcome chat this way). The owning profile is NOT an
+      // override — point $newChatProfile at it first (selectProfile-style) so
+      // the create lands on that profile's own backend and every later ambient
+      // RPC follows.
       createOverrides?: SessionCreateOverrides
     ): Promise<string | null> => {
       const startingStoredSessionId = selectedStoredSessionIdRef.current

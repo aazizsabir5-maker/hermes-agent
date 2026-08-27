@@ -24,7 +24,6 @@ import {
   $layoutTree,
   adoptContributedPanes,
   dismissTreePane,
-  isCollapsePane,
   resetEnforcedDocks,
   setActiveTreePane,
   undismissTreePanes
@@ -57,9 +56,9 @@ export const $chatOnboardingThreadIds = atom<readonly string[]>([])
  *  client-side the moment the chat opens; the model is told what was said
  *  and picks up from the user's answer. */
 const GREETINGS = [
-  "Hey, welcome — I'm Setup, your Hermes guide. I'll get things arranged around you, then spin up your first agent and stick around while you find your feet.\n\nFirst — what should I call you?",
-  "Welcome in — I'm Setup. A few quick questions, then I'll spin up your first agent and stay close while you settle in.\n\nWhat should I call you?",
-  "Hey, you made it — I'm Setup, your guide here. Quick setup, then I mint an agent for your first build and stick around after.\n\nFirst things first: what should I call you?"
+  "Hey, come on in. I'm Hermes. Give me two minutes to set the place up around you, then we'll put me to work on something you actually want done.\n\nFirst though, what should I call you?",
+  "Hey there, I'm Hermes. A couple of quick things and this will feel like yours, then we'll find you something worth doing.\n\nSo, what should I call you?",
+  "Hi, you found me. I'm Hermes. Let me get everything arranged around you, then we'll pick something real to start on.\n\nFirst things first though, what should I call you?"
 ] as const
 
 export const $onboardingGreeting = atom('')
@@ -169,28 +168,28 @@ function reconcileLayout(id: string, tree: LayoutNode): void {
   // Everything this layout asks for is wanted, whatever the last one decided.
   undismissTreePanes(declared)
 
-  // Adoption keeps every pane a preset doesn't declare — as a TAB. Hide-style
-  // panes (files, review) vanish with their stores, but tool panels (terminal,
-  // logs) keep their tab visible even while collapsed, so Basic would land
-  // with a Terminal tab beside the chat. Dismiss the undeclared tool panes:
-  // the tab goes, and the toggle (⌃`) can still bring the pane back.
+  // The preset IS the layout. Adoption otherwise keeps every pane the preset
+  // doesn't declare, and during a first run each of them is a surface the
+  // user has no idea exists: a Terminal tab beside the chat on Basic, an
+  // empty Cronjobs column, a Bots roster tabbed onto Sessions (its dock is
+  // `enforce: true`, so it re-homes there on every pick). That last one also
+  // costs the sidebar its plain face — two panes in the left zone is what
+  // conjures a tab strip over what should just be the sessions list.
   //
-  // Undeclared `placement: 'main'` panes go too. They don't tab — they claim a
-  // COLUMN next to the conversation, which is how a first run that has never
-  // scheduled anything opened onto an empty Cronjobs panel. The preset decides
-  // what shares the main area during onboarding; nothing else gets to.
+  // So: anything the picked layout didn't ask for is dismissed. The pane
+  // isn't gone, only unplaced — its own toggle (⌃` for the terminal, the
+  // Layout menu, `revealTreePane`) brings it back the moment the user wants
+  // it, and the living-screen pane re-docks itself right after this runs.
   //
   // Candidates come from the REGISTRY, not just the tree: a pane that isn't
   // placed yet still gets its dismissal recorded, and adoption skips dismissed
   // panes — so this holds whether the pane arrives before or after the sweep.
   const dismissUndeclared = () => {
-    const registered = registry.getArea('panes')
-
-    const isMainPane = (paneId: string) =>
-      (registered.find(pane => pane.id === paneId)?.data as { placement?: string } | undefined)?.placement === 'main'
-
-    for (const paneId of new Set([...allPaneIds($layoutTree.get() ?? tree), ...registered.map(pane => pane.id)])) {
-      if (!declared.has(paneId) && (isCollapsePane(paneId) || isMainPane(paneId))) {
+    for (const paneId of new Set([
+      ...allPaneIds($layoutTree.get() ?? tree),
+      ...registry.getArea('panes').map(pane => pane.id)
+    ])) {
+      if (!declared.has(paneId)) {
         dismissTreePane(paneId)
       }
     }
@@ -204,39 +203,28 @@ function reconcileLayout(id: string, tree: LayoutNode): void {
   setSidebarOpen(true)
 
   // Dock invariants normally run once at boot, against whatever tree existed
-  // then — the SOLO tree, which has no sessions column for the Bots pane to
-  // anchor to. That pass burns the ledger entry, so re-running adoption alone
-  // left Bots stranded as a tab in the chat zone. Reopen the window first, now
-  // that the layout it should dock into actually exists.
+  // then — the SOLO tree, which has no sessions column for a left-docking
+  // pane to anchor to. That pass burns the ledger entry, so re-running
+  // adoption alone left those panes stranded as tabs in the chat zone. Reopen
+  // the window first, now that the layout they should dock into exists.
   resetEnforcedDocks()
   adoptContributedPanes()
 
-  // The sidebar's opening face used to follow the layout (Elite → Sessions,
-  // Basic → the bot roster, mirroring defaultHandoffSurface) — justified when
-  // the user's only conversations were bot canonicals the Sessions list
-  // hides. That assumption is stale: the Setup guide's chat is a VISIBLE
-  // Sessions row now, so fronting Bots on a Basic pick hid the row of the
-  // exact conversation the user was mid-sentence in (they had to click back
-  // to Sessions to recover it — reproducible on every Basic pick). A pick
-  // re-arranges panes; it must never navigate the user away from their
-  // conversation. The roster gets its moment at the bot-surface HANDOFF
-  // (wiring fronts it when the minted bot is real), not before.
-  //
-  // Still guarded: if the docking above didn't take, the pane is stacked
-  // with the chat, and fronting it there would bury the conversation.
-  const facePaneId = SESSIONS_PANE_ID
+  // The sidebar opens on Sessions. A pick re-arranges panes; it must never
+  // navigate the user away from the conversation they are mid-sentence in, so
+  // this is only ever a SIDEBAR payoff — if the docking above didn't take and
+  // the pane is stacked with the chat, fronting it there would bury them.
   const assembled = $layoutTree.get()
-  const faceGroup = assembled ? findGroupOfPane(assembled, facePaneId) : null
+  const faceGroup = assembled ? findGroupOfPane(assembled, SESSIONS_PANE_ID) : null
 
   if (faceGroup && !faceGroup.panes.includes('workspace')) {
-    setActiveTreePane(facePaneId)
+    setActiveTreePane(SESSIONS_PANE_ID)
   }
 
-  // LAST, because panes can be a CONSEQUENCE of the assembly above: the bots
-  // plugin registers Cronjobs the moment its roster becomes visible, so
-  // fronting Bots conjures a pane the preset never asked for. Sweeping before
-  // that point swept a tree the fronting had not happened in yet, and Basic
-  // still landed with an empty Cronjobs column beside the chat.
+  // LAST, because panes can be a CONSEQUENCE of the assembly above: a plugin
+  // registers more panes the moment one of its own becomes visible. Sweeping
+  // before that point swept a tree those arrivals had not happened in yet,
+  // and Basic still landed with an empty Cronjobs column beside the chat.
   dismissUndeclared()
 }
 
