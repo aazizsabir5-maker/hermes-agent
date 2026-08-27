@@ -177,12 +177,14 @@ export function ChatBar({
   // queue uses the stored-session fallback key (prompts can queue pre-resume).
   const statusSessionId = sessionId ?? null
 
-  // The guided-onboarding conversation never shows the git strip — branch,
-  // ±, worktrees are exactly the machinery that first run is hiding. Solo
-  // covers the moments before the session ids are known.
+  // The guided-onboarding conversation hides the git strip (branch, ±,
+  // worktrees are exactly the machinery a first run is hiding) and the model
+  // pill: the guide is pinned to its own fast lane on its own profile, so the
+  // pill there names a model the user did not choose and cannot usefully
+  // change. Solo covers the moments before the session ids are known.
   const onboardingThreadIds = useStore($chatOnboardingThreadIds)
   const chatOnboardingSolo = useStore($chatOnboardingSolo)
-  const hideCodingRow = chatOnboardingSolo || (sessionId != null && onboardingThreadIds.includes(sessionId))
+  const guidedChat = chatOnboardingSolo || (sessionId != null && onboardingThreadIds.includes(sessionId))
 
   // Coarse edge: re-renders ChatBar only when the stack shows/hides, NOT on
   // every per-item status mutation or other sessions' churn (see the hook).
@@ -988,6 +990,7 @@ export function ChatBar({
       busyAction={busyAction}
       canSubmit={canSubmit}
       compactModelPill={poppedOut || compactPill}
+      hideModelPill={guidedChat}
       conversation={{
         active: voiceConversationActive,
         level: conversation.level,
@@ -1291,7 +1294,7 @@ export function ChatBar({
                     composerSurfaceGlass
                   )}
                 />
-                {!hideCodingRow && (
+                {!guidedChat && (
                   <CodingStatusRow
                     onBranchOff={handleBranchOff}
                     onConvertBranch={handleConvertBranch}
