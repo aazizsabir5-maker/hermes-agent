@@ -3,10 +3,12 @@ Scripted onboarding scenario for the mock gateway — the Setup-bot flow
 (PR #13 shape): cinematic → solo guided chat with the Setup bot → fork →
 options card → handoff → the task bot's chat. Deterministic, no LLM.
 
-Session routing is by PROFILE:
+Session routing is by PROFILE + canonical identity:
   * `hermes-setup` profile's hidden canonical (title "Bot Chat") = the guide.
     Its step machine walks name → look → connectors → layout → fork →
     (options card) → handoff, then answers the [setup] handoff notes.
+    Any OTHER session on the setup profile is treated as a task chat —
+    profile alone is not identity.
   * a minted task-bot profile's hidden canonical (title "Bot Chat") = the
     build chat. Its first visible turn is the brief; it replies with the
     permissions note + ::onboarding{step="progress"} cards.
@@ -267,6 +269,41 @@ def _brief_for(task):
     return _short(f'{task} — build the first working version and show your work as you go.', 190)
 
 
+# onboarding-wizard.ts:495 — "- SPECIFIC task in mind: skip the options card —
+# go straight to the handoff." A conservative doing-verb gate: only an answer
+# that clearly LEADS with a task verb is treated as that specific task; vaguer
+# answers still earn the options card below.
+TASK_VERB_RE = re.compile(
+    r"^\W*(?:please\s+|can you\s+|could you\s+|help me\s+)?"
+    r"(?:do|build|make|create|research|track|write|set\s+up)\b",
+    re.IGNORECASE,
+)
+
+# The `first` options have no seeded source to quote (contrast the fork's
+# ::ask pills, which ARE quoted — see the module docstring): the runbook pins
+# no literal copy, only the shape — onboarding-wizard.ts:497: "Then place a
+# card of options built from that answer plus their tools:
+# ::onboarding{step=\"first\" options=\"First idea|Second idea|Third idea\"}
+# — 2 to 4 options, each a short phrase (under 60 chars) … all specific to
+# THIS user." The mock demonstrates that contract deterministically:
+# templates parameterized by the working answer. This tuple is the ONLY copy
+# anywhere — never mirror literal pill text into the runbook.
+FIRST_TEMPLATES = (
+    'A daily briefing on {topic}',
+    'A tracker for {topic}',
+    'A page that turns {topic} notes into a plan',
+    'A reminder that nudges you about {topic}',
+)
+
+
+def _first_topic(text):
+    """The {topic} slot, sized so every rendered option clears
+    FirstBuildCard's 60-char-per-option cap (directive.tsx:370) even after
+    substitution into the widest template."""
+    room = 60 - max(len(t) - len('{topic}') for t in FIRST_TEMPLATES)
+    return _short(text, room) or 'the thing on your plate'
+
+
 def _surface_for(layout_report):
     return 'session' if 'Elite' in layout_report else 'bot'
 
@@ -283,11 +320,17 @@ class Scenario:
         text = (text or '').strip()
         profile = session.get('profile') or 'default'
 
-        if profile == 'hermes-setup':
-            return self._setup_reply(session, text, display_kind)
-
         if profile != 'default':
-            # A minted task bot's canonical chat.
+            # The guide script runs ONLY in Setup's canonical chat — the
+            # hidden 'Bot Chat' on the hermes-setup profile. Profile alone is
+            # not identity: a plain task session that lands on the setup
+            # profile (a mis-routed create) must still behave like a task
+            # chat, never consume its first message as the NAME beat.
+            if profile == 'hermes-setup' and session.get('hidden') and session.get('title') == 'Bot Chat':
+                return self._setup_reply(session, text, display_kind)
+
+            # A minted task bot's canonical chat — or any other session on a
+            # non-default profile.
             return self._taskbot_reply(session, text, display_kind)
 
         # Hidden helper sessions (module gen / populate) and anything else.
@@ -397,12 +440,25 @@ class Scenario:
             return "What are you working on right now — the real thing on your plate this week?"
 
         if step == 'working':
+            # onboarding-wizard.ts:495: "SPECIFIC task in mind: skip the
+            # options card — go straight to the handoff." An answer that
+            # leads with a doing-verb IS that specific task, and the answer
+            # itself is the brief — the same handoff an option tap takes.
+            if TASK_VERB_RE.match(text):
+                return self._handoff(session, _short(text, 40), _brief_for(text))
+
+            # Otherwise, onboarding-wizard.ts:497: "Then place a card of
+            # options built from that answer plus their tools … all specific
+            # to THIS user." Deterministic stand-in: FIRST_TEMPLATES shaped
+            # around their answer, and prose that acknowledges it.
+            topic = _first_topic(text)
+            options = '|'.join(t.format(topic=topic) for t in FIRST_TEMPLATES)
             self.gateway.touch_step(session['id'], 'first')
             return (
                 f'::onboarding{{step="working" value="{_short(text)}"}}\n\n'
-                'Got it — that narrows things nicely. Tap the one that fits '
-                'best.\n\n'
-                '::onboarding{step="first" options="A daily briefing that lands each morning|A tracker for the thing you repeat every week|A page that turns your notes into a plan|A reminder that nudges you at the right time"}'
+                f'Got it — plenty to build from around {topic}. Tap the one '
+                'that fits best.\n\n'
+                f'::onboarding{{step="first" options="{options}"}}'
             )
 
         if step == 'machine':

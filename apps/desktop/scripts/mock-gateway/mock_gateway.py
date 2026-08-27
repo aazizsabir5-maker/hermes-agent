@@ -366,10 +366,17 @@ class Gateway:
             # racing, dev re-kick) resumes the existing chat instead of
             # minting a second canonical whose title stamp loses to the index.
             want_title = params.get('title') or ''
+            # The session's profile: an explicit params['profile'] wins (the
+            # real backend honors the param in shared/global-remote routing —
+            # use-session-actions sends it), else the serving process's own
+            # identity. Without this, a cross-socket create silently lands in
+            # the serving process's profile and the shared state file masks
+            # the misroute.
+            want_profile = params.get('profile') or self.profile
             if bool(params.get('hidden')) and want_title == 'Bot Chat':
                 def _find(state):
                     for s in state['sessions'].values():
-                        if s['hidden'] and s['title'] == want_title and s['profile'] == self.profile:
+                        if s['hidden'] and s['title'] == want_title and s['profile'] == want_profile:
                             return s
                     return None
                 existing = self.store.read(_find)
@@ -389,7 +396,7 @@ class Gateway:
                     sid,
                     hidden=bool(params.get('hidden')),
                     title=want_title,
-                    profile=self.profile,
+                    profile=want_profile,
                     model=params.get('model'),
                 )
                 # Seeded history (guided onboarding runbook + greeting) rides

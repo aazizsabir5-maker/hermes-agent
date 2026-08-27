@@ -8,6 +8,7 @@ Run:  python3 scripts/mock-gateway/test_mock.py
 
 import json
 import os
+import re
 import socket
 import struct
 import subprocess
@@ -229,12 +230,25 @@ def main():
 
         reply = setup_cl.submit(sid, 'Automate something I already do')
         assert 'working on right now' in reply, reply
-        reply = setup_cl.submit(sid, 'Shipping the onboarding demo this week')
-        assert '::onboarding{step="working" value="' in reply, reply
-        assert '::onboarding{step="first" options="' in reply, reply
-        print('fork → what are you working on → options card OK')
+        # A non-task answer earns the options card. Behavior contract, not a
+        # snapshot (FLOW.md:48-51 "generated options … built from that
+        # answer"): every chip derives from the answer, fits FirstBuildCard's
+        # 60-char cap (directive.tsx:370), and the prose acknowledges it.
+        working_answer = 'the SpaceX backlog'
+        reply = setup_cl.submit(sid, working_answer)
+        assert f'::onboarding{{step="working" value="{working_answer}"}}' in reply, reply
+        m = re.search(r'::onboarding\{step="first" options="([^"]*)"\}', reply)
+        assert m, reply
+        options = m.group(1).split('|')
+        assert 2 <= len(options) <= 4, options
+        for opt in options:
+            assert working_answer in opt, (opt, options)
+            assert len(opt) <= 60, (len(opt), opt)
+        prose = '\n'.join(l for l in reply.splitlines() if not l.startswith('::onboarding'))
+        assert working_answer in prose, reply
+        print('fork → what are you working on → answer-derived options card OK')
 
-        reply = setup_cl.submit(sid, 'A tracker for the thing you repeat every week')
+        reply = setup_cl.submit(sid, options[0])
         assert '::onboarding{step="handoff" task="' in reply, reply
         assert 'surface="bot"' in reply, reply
         assert 'brief="' in reply, reply
@@ -242,9 +256,22 @@ def main():
         print('options tap → handoff directive OK (surface=bot on Basic layout)')
 
         # ── the machine-setup branch, on a second guide session ──
-        second = setup_cl.rpc('session.create', {'messages': [
-            {'content': RUNBOOK, 'display_kind': 'hidden', 'role': 'user'},
-        ]})['session_id']
+        # The guide script is gated on canonical identity (hidden 'Bot Chat'
+        # on hermes-setup), not profile alone — so fresh guide walks must mint
+        # real canonicals. Retire the previous canonical's title first so
+        # adopt-before-mint mints fresh instead of resuming it.
+        guide = [sid]
+
+        def fresh_guide():
+            setup_cl.rpc('session.title', {'session_id': guide[0], 'title': 'Guide (retired)'})
+            s = setup_cl.rpc('session.create', {'hidden': True, 'title': 'Bot Chat', 'messages': [
+                {'content': RUNBOOK, 'display_kind': 'hidden', 'role': 'user'},
+            ]})['session_id']
+            assert s != guide[0], 'expected a fresh mint, got an adopt'
+            guide[0] = s
+            return s
+
+        second = fresh_guide()
         setup_cl.submit(second, 'Sam')
         setup_cl.submit(second, '[setup] accent color: Flame', display_kind='hidden')
         setup_cl.submit(second, '[setup] connect later: none for now', display_kind='hidden')
@@ -257,7 +284,40 @@ def main():
         assert 'surface="session"' in reply, reply
         print('machine branch → handoff with plan=machine-setup, surface=session on Elite OK')
 
+        # ── the working beat's SPECIFIC-task branch + determinism ──
+        # onboarding-wizard.ts:495: "SPECIFIC task in mind: skip the options
+        # card — go straight to the handoff."
+        def working_reply(answer):
+            """Walk a fresh guide session to the working beat, answer it,
+            and return the reply."""
+            s = fresh_guide()
+            setup_cl.submit(s, 'Sam')
+            setup_cl.submit(s, '[setup] accent color: Flame', display_kind='hidden')
+            setup_cl.submit(s, '[setup] connect later: none for now', display_kind='hidden')
+            setup_cl.submit(s, '[setup] layout: Basic', display_kind='hidden')
+            setup_cl.submit(s, 'Automate something I already do')
+            return s, setup_cl.submit(s, answer)
+
+        task_sid, reply = working_reply('Do a deep research on SpaceX')
+        assert '::onboarding{step="handoff" task="' in reply, reply
+        assert 'step="first"' not in reply, reply  # options card skipped
+        m = re.search(r'brief="([^"]*)"', reply)
+        assert m and 'SpaceX' in m.group(1), reply
+        # The step machine really moved to handoff (shared _handoff path).
+        followup = setup_cl.submit(task_sid, 'anything else')
+        assert followup and 'handoff card' in followup, followup
+        print('task-verb working answer → straight to handoff, brief carries the topic OK')
+
+        _, run_a = working_reply('the SpaceX backlog')
+        _, run_b = working_reply('the SpaceX backlog')
+        assert run_a == run_b, (run_a, run_b)
+        print('working beat is deterministic: identical answer → identical reply OK')
+
         # ── the roster's identity contract ──
+        # Restore Setup's ORIGINAL canonical (the fresh-guide walks retired it)
+        # so the roster and the later whisper target the first Bot Chat.
+        setup_cl.rpc('session.title', {'session_id': guide[0], 'title': 'Guide (retired)'})
+        setup_cl.rpc('session.title', {'session_id': sid, 'title': 'Bot Chat'})
         rows = {p['name']: p for p in default.rpc('profiles.list')['profiles']}
         assert rows['hermes-setup']['canonical_session']['id'] == sid, rows['hermes-setup']
         print('profiles.list reports the canonical Bot Chat per profile OK')
@@ -295,6 +355,50 @@ def main():
         finally:
             taskbot_proc.terminate()
             taskbot_proc.wait(timeout=5)
+
+        # ── profile seams: params['profile'] honored + guide gate is identity ──
+        # (i) A create carrying an EXPLICIT profile='default' over the SETUP
+        # process's socket lands in 'default' — and its first message gets a
+        # generic reply, never the guide's NAME beat (the mock-2 hijack:
+        # cross-socket creates used to be stamped with the process profile).
+        mis = setup_cl.rpc('session.create', {
+            'profile': 'default', 'title': 'Do a deep research on SpaceX',
+        })
+        msid = mis['session_id']
+        row = next(s for s in setup_cl.rpc('session.list', {'include_hidden': True})['sessions']
+                   if s['id'] == msid)
+        assert row['profile'] == 'default', row
+        reply = setup_cl.submit(
+            msid, 'Do a deep research on SpaceX — build the first working version and show your work as you go.')
+        assert reply is not None
+        assert 'step="name"' not in reply and 'Good to meet you' not in reply, reply
+        print('explicit profile=default create over the setup socket lands in default, no name beat OK')
+
+        # Adopt-before-mint matches against the PARAM profile's sessions too:
+        # a canonical create carrying profile='week-tracker' on the setup
+        # socket adopts the task bot's existing canonical.
+        adopted = setup_cl.rpc('session.create', {
+            'hidden': True, 'title': 'Bot Chat', 'profile': 'week-tracker',
+        })
+        assert adopted['session_id'] == tsid and adopted.get('adopted') is True, adopted
+        print('adopt-before-mint matches against the param profile OK')
+
+        # (ii) A VISIBLE session that really does land on hermes-setup (no
+        # profile param → process identity) behaves like a task chat…
+        stray = setup_cl.rpc('session.create', {'title': 'Track my week'})
+        ssid = stray['session_id']
+        row = next(s for s in setup_cl.rpc('session.list', {'include_hidden': True})['sessions']
+                   if s['id'] == ssid)
+        assert row['profile'] == 'hermes-setup', row
+        reply = setup_cl.submit(ssid, 'Track my week — build the first working version.')
+        assert '::onboarding{step="progress"' in reply, reply
+        assert 'permissions' in reply.lower(), reply
+        assert 'step="name"' not in reply and 'Good to meet you' not in reply, reply
+        # …while the canonical hidden Bot Chat still runs the guide script
+        # (sid sits at step 'after' post-handoff).
+        reply = setup_cl.submit(sid, 'are you still there?')
+        assert reply and 'Still here' in reply, reply
+        print('visible hermes-setup session → task-chat behavior; canonical Bot Chat keeps the guide OK')
 
         # ── dormant dashboard flow still parses ──
         helper = default.rpc('session.create', {'hidden': True, 'source': 'desktop'})
