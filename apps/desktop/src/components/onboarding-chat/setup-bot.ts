@@ -312,8 +312,8 @@ export async function stampBotMeta(
  *  plans in VISIBLE prose instead (live runs: walls of "Let me re-read the
  *  steps…"). Minimal gives that planning a hidden home while staying fast. */
 export const FAST_LANE = {
-  model: 'deepseek/deepseek-v4-flash-0731',
-  provider: 'nous',
+  model: 'anthropic/claude-opus-5-fast',
+  provider: 'openrouter',
   reasoningEffort: 'minimal'
 } as const
 
