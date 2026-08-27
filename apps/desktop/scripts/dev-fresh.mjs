@@ -129,6 +129,40 @@ function stageSandbox({ keep, mock }) {
     return true
   })
 
+  // The seed exists to reach a MODEL, not to clone the user's whole rig.
+  // mcp_servers rides along in config.yaml and every entry is a liability
+  // here: the sandbox has no credentials for them, so the first task
+  // backend spends ~40s failing/parking five dead servers during exactly
+  // the window the handoff's go-signal submit races (observed: the brief
+  // evaporated and the task session opened blank). Strip the block from
+  // the COPY; the real config is untouched.
+  const seededConfig = path.join(hermesHome, 'config.yaml')
+
+  if (fs.existsSync(seededConfig)) {
+    const lines = fs.readFileSync(seededConfig, 'utf8').split('\n')
+    const kept = []
+    let inMcpBlock = false
+
+    for (const line of lines) {
+      if (/^mcp_servers\s*:/.test(line)) {
+        inMcpBlock = true
+        kept.push('mcp_servers: {}')
+        continue
+      }
+
+      // A top-level block ends at the next non-indented, non-blank line.
+      if (inMcpBlock && /^\S/.test(line)) {
+        inMcpBlock = false
+      }
+
+      if (!inMcpBlock) {
+        kept.push(line)
+      }
+    }
+
+    fs.writeFileSync(seededConfig, kept.join('\n'))
+  }
+
   // The mock answers for the backend, credentials included, so an unconfigured
   // machine can still run the flow — that is half the point of it.
   if (copied.length === 0 && !mock) {
