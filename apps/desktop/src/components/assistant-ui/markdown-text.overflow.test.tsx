@@ -53,7 +53,7 @@ describe('markdown surface survives stack-overflow content', () => {
   // three render through this component. Guarding only one of them is what let
   // the bug survive an earlier fix attempt.
   it.each([
-    ['reasoning (disableArtifacts)', { disableArtifacts: true }],
+    ['reasoning (scratchpad)', { scratchpad: true }],
     ['assistant answer', {}]
   ])('survives on the %s path', (_label, surfaceProps) => {
     const { container } = renderQuietly(
