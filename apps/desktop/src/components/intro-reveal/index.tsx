@@ -1,10 +1,9 @@
 /**
  * Gate that decides when the intro reveal mounts.
  *
- * Two entry paths:
- * - First run: onboarding reports an unconfigured runtime that the user hasn't
- *   skipped. The reveal plays once, ahead of the picker, then hands off.
- * - Replay: Settings → About sets `requested` on the store directly.
+ * One entry path: onboarding reports an unconfigured runtime that the user
+ * hasn't skipped. The reveal plays once, ahead of the picker, then hands off.
+ * (Dev stages start it directly on the store.)
  *
  * Kept separate from the overlay so the overlay itself has a single prop-less
  * contract (`$introReveal.phase !== 'hidden'`) and the onboarding-aware logic

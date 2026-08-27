@@ -5,7 +5,6 @@ import {
   finishIntroReveal,
   hasSeenIntroReveal,
   leaveIntroReveal,
-  replayIntroReveal,
   resetIntroRevealForTests,
   setIntroRevealBeat,
   shouldPlayFirstRunIntro,
@@ -62,10 +61,13 @@ describe('intro-reveal store', () => {
     expect($introReveal.get().phase).toBe('hidden')
   })
 
-  it('replay marks the state as replay', () => {
-    replayIntroReveal()
-    expect($introReveal.get().replay).toBe(true)
-    expect($introReveal.get().phase).toBe('playing')
+  it('carries the standalone flag that decides the onboarding handoff', () => {
+    startIntroReveal(true)
+    expect($introReveal.get().standalone).toBe(true)
+
+    resetIntroRevealForTests()
+    startIntroReveal(false)
+    expect($introReveal.get().standalone).toBe(false)
   })
 
   it('beat advances only while visible and dedupes repeats', () => {

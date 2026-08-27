@@ -2063,8 +2063,6 @@ export const ar = defineLocale({
   },
   introReveal: {
     presents: 'Nous Research presents',
-    replay: 'إعادة تشغيل المقدمة',
-    replayDesc: 'شغّل تسلسل المقدمة الأول مرة أخرى.',
     skip: 'تخطي',
     tagline: 'وكيلك، في كل مكان',
     wordmark: 'HERMES'

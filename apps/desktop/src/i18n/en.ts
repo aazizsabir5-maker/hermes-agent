@@ -2658,8 +2658,6 @@ export const en: Translations = {
 
   introReveal: {
     presents: 'Nous Research presents',
-    replay: 'Replay intro',
-    replayDesc: 'Play the first-run intro sequence again.',
     skip: 'Skip',
     tagline: 'Your agent, everywhere',
     wordmark: 'HERMES'

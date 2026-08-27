@@ -13,11 +13,10 @@
  * unavailable (tests, web), the store still runs the clock so the logic is
  * exercisable headlessly.
  *
- * Trigger contract:
- * - First run: onboarding reports `configured === false` and the user has
- *   neither completed nor skipped the intro. The reveal mounts *before* the
- *   provider picker.
- * - Replay: Settings → About → "Replay intro" calls `replayIntroReveal()`.
+ * Trigger contract: first run only — onboarding reports `configured === false`
+ * and the user has neither completed nor skipped the intro. The reveal mounts
+ * *before* the provider picker. There is no user-facing replay; the dev
+ * `--movie` stage plays it standalone.
  */
 
 import { atom } from 'nanostores'
@@ -39,8 +38,10 @@ export type IntroRevealPhase =
 export interface IntroRevealState {
   /** Beat index the overlay should be showing (0 = preamble). */
   beat: number
-  /** True when opened from Settings (replay) rather than the first-run gate. */
-  replay: boolean
+  /** Played on its own (the dev `--movie` stage) rather than from the first-run
+   *  gate: the finish hands the screen back instead of continuing to the
+   *  wizard. */
+  standalone: boolean
   phase: IntroRevealPhase
   /** Wall-clock ms when the current play started. */
   startedAt: number
@@ -55,7 +56,7 @@ export interface IntroRevealBeatPush {
 const INITIAL: IntroRevealState = {
   beat: 0,
   phase: 'hidden',
-  replay: false,
+  standalone: false,
   startedAt: 0
 }
 
@@ -114,8 +115,8 @@ function pushBeat(): void {
   bridge()?.pushBeat?.({ beat: s.beat, leaving: s.phase === 'leaving' })
 }
 
-/** Begin the sequence. `replay` distinguishes the Settings entry point. */
-export function startIntroReveal(replay: boolean): void {
+/** Begin the sequence. `standalone` skips the handoff into onboarding. */
+export function startIntroReveal(standalone: boolean): void {
   if (!isIntroRevealEnabled()) {
     return
   }
@@ -123,19 +124,14 @@ export function startIntroReveal(replay: boolean): void {
   $introReveal.set({
     beat: 0,
     phase: 'playing',
-    replay,
+    standalone,
     startedAt: Date.now()
   })
 
   // The cinematic owns the screen: the app window hides so the sequence plays
-  // over the bare desktop (replays included — close() hands the screen back).
+  // over the bare desktop (standalone included — close() hands the screen back).
   void bridge()?.open?.({ hideMain: true }).catch(() => undefined)
   pushBeat()
-}
-
-/** Settings → About → "Replay intro". */
-export function replayIntroReveal(): void {
-  startIntroReveal(true)
 }
 
 export function setIntroRevealBeat(beat: number): void {
@@ -163,7 +159,7 @@ export function leaveIntroReveal(): void {
 
 /** Terminal state — records seen and hides the overlay. */
 export function finishIntroReveal(): void {
-  const wasReplay = $introReveal.get().replay
+  const wasStandalone = $introReveal.get().standalone
 
   markSeen()
   $introReveal.set(INITIAL)
@@ -173,7 +169,7 @@ export function finishIntroReveal(): void {
   // old chain hid the app for a wizard card; a click-to-skip then left a
   // bare desktop because nothing else owned the screen.)
   void import('./onboarding-wizard').then(({ hasCompletedOnboardingWizard, startOnboardingWizard }) => {
-    const startWizard = !wasReplay && !hasCompletedOnboardingWizard()
+    const startWizard = !wasStandalone && !hasCompletedOnboardingWizard()
 
     if (startWizard) {
       startOnboardingWizard()

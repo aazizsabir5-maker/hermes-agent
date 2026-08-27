@@ -2254,8 +2254,6 @@ export interface Translations {
 
   introReveal: {
     presents: string
-    replay: string
-    replayDesc: string
     skip: string
     tagline: string
     wordmark: string
