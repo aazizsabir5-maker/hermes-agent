@@ -12503,9 +12503,16 @@ ipcMain.handle('hermes:intro-reveal:open', async (_event, payload) => {
   // the app hides so the sequence plays over the bare desktop. The flag is
   // shared with the wizard window so whichever surface ends the chain
   // restores the app exactly once.
-  if (payload?.hideMain && mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+  // First-run chain: the cinematic owns the screen. Stamp the hide even if
+  // the app window hasn't been shown yet (it boots `show: false` until the
+  // first paint) — otherwise skip closes the overlay and showMain is a no-op
+  // because we "never hid", and the user is looking at a bare desktop.
+  if (payload?.hideMain && mainWindow && !mainWindow.isDestroyed()) {
     onboardingFlowHidMain = true
-    mainWindow.hide()
+
+    if (mainWindow.isVisible()) {
+      mainWindow.hide()
+    }
   }
 
   return { ok: true }
@@ -12789,6 +12796,9 @@ ipcMain.on('hermes:chat-onboarding:solo-boot', event => {
     y: Math.round(area.y + (area.height - height) / 2)
   })
 
+  // Always reveal. The hide flag can miss if the cinematic opened before the
+  // first paint; kickoff still has to put a window on screen.
+  onboardingFlowHidMain = true
   showMainAfterOnboarding()
 })
 

@@ -168,12 +168,10 @@ export function finishIntroReveal(): void {
   markSeen()
   $introReveal.set(INITIAL)
 
-  // First-run handoff: the cinematic ends, the setup wizard begins — the app
-  // window STAYS hidden between the two (no flash of the shell mid-chain).
-  // The wizard starts BEFORE the overlay closes so its window is already
-  // spawning while the cinematic dissolves — the card's slide-up entrance
-  // then reads as one continuous motion instead of a gap between windows.
-  // Replays and already-onboarded skips hand the screen straight back.
+  // First-run handoff: cinematic ends, Setup's chat begins. The app window
+  // has to come back with it — there is no wizard window in between. (The
+  // old chain hid the app for a wizard card; a click-to-skip then left a
+  // bare desktop because nothing else owned the screen.)
   void import('./onboarding-wizard').then(({ hasCompletedOnboardingWizard, startOnboardingWizard }) => {
     const startWizard = !wasReplay && !hasCompletedOnboardingWizard()
 
@@ -181,8 +179,12 @@ export function finishIntroReveal(): void {
       startOnboardingWizard()
     }
 
+    // Guide mode has no wizard window — the chat IS the next surface, so the
+    // app has to come back with the cinematic. Keeping it hidden was the
+    // old video→wizard-window chain; a click-to-skip then left a bare desktop
+    // because nothing else was going to own the screen.
     void bridge()
-      ?.close?.({ showMain: !startWizard })
+      ?.close?.({ showMain: true })
       .catch(() => undefined)
   })
 }

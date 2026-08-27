@@ -327,7 +327,17 @@ export function OnboardingWizardGate({ enabled, onKickoff }: OnboardingWizardGat
   useEffect(() => {
     const stage = onboardingDevStage()
 
-    if (!stage || !enabled || devStageLaunched) {
+    if (!stage || devStageLaunched) {
+      return
+    }
+
+    // The cinematic does not need the gateway. Waiting for `enabled` meant
+    // `--movie` sat on a connecting screen for the whole backend boot, then
+    // played the video. Play it as soon as the renderer is up; the guided
+    // chat still waits on the gateway via the handoff effect below.
+    const cinematic = stage === 'full' || stage === 'movie'
+
+    if (!cinematic && !enabled) {
       return
     }
 
