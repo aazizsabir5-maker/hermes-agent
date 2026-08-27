@@ -10,10 +10,10 @@ import { $activeSessionId, $selectedStoredSessionId } from '@/store/session'
  * .pen files via the native picker. Both are one-click-does-the-whole-thing
  * (side-effecting) pills per the suggestion contract.
  *
- * Self-limiting: only offers while pen.dev is installed AND no canvas is
- * already open (the drawer on screen means the suggestion is done), and only
- * on completed whole-word triggers. Ambiguous words ("design", "draw") get no
- * bare keyword — coding chats are full of design docs and design systems.
+ * Self-limiting: only offers while no canvas is already open (the pane on
+ * screen means the suggestion is done), and only on completed whole-word
+ * triggers. Ambiguous words ("design", "draw") get no bare keyword — coding
+ * chats are full of design docs and design systems.
  */
 
 const STATUS_TTL_MS = 30_000

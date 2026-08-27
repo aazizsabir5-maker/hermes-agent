@@ -1,11 +1,10 @@
 /**
  * PEN CANVAS — pen.dev design documents hosted by hermes.
  *
- * The canvas is a LAYOUT-TREE PANE (src/app/chat/pen-tile.tsx) hosting the
- * user's installed pen.dev editor in a <webview> on hermes-pen://. Main owns
- * the documents (create/serve/save/session ties); this store is the renderer's
- * doors: open/close/status, the agent bridge's tool runner, the session
- * follower, and the library dialog's state.
+ * The canvas is a LAYOUT-TREE PANE (src/app/chat/pen-tile.tsx) hosting
+ * app.pen.dev in a <webview>. Main owns the documents (create/save/session
+ * ties); this store is the renderer's doors: open/close/status, the agent
+ * tool runner, the session follower, and the library dialog.
  */
 
 import { atom } from 'nanostores'

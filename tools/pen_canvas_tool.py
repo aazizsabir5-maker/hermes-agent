@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
 """Drive a pen.dev design canvas from the Hermes desktop GUI.
 
-Hermes desktop hosts the user's installed pen.dev editor in "Canvas" tabs
-(apps/desktop/electron/pen-canvas.ts). This tool is the agent's door into that
-canvas: it round-trips through the gateway's blocking-prompt bridge — the same
-one ``read_preview`` uses — so it works wherever the CLIENT is, remote
-backends included. tui_gateway emits ``pen.tool.request``, the renderer runs
-the pen operation against the live canvas (or the user's running pen.dev
-desktop app when no Canvas tab is open — the HUD-mode path) and answers with
-``pen.tool.respond``.
+Hermes desktop embeds the hosted pen.dev editor (app.pen.dev/new?embed) in a
+Canvas pane. This tool is the agent's door into that canvas: it round-trips
+through the gateway's blocking-prompt bridge — the same one ``read_preview``
+uses — so it works wherever the CLIENT is, remote backends included.
+tui_gateway emits ``pen.tool.request``, the renderer runs the operation
+against the live canvas and answers with ``pen.tool.respond``.
 
-This module is just schema + a thin dispatcher over the platform-injected
-callback; the pen operation names and payloads pass through verbatim so the
-editor's own tool surface stays the source of truth.
+Host actions (``open`` / ``close``) own the pane. Every other action name is
+forwarded to the editor's live MCP tools — discovered at connect, never
+hardcoded here.
 
 Lives in the ``desktop_ui`` toolset, which the GUI gateway enables only for
 desktop-sourced sessions.
@@ -35,19 +33,6 @@ _MAX_RESULT_CHARS = 48_000
 # exports) — materialize it to disk instead of flooding the context window.
 _BASE64_MATERIALIZE_THRESHOLD = 4_096
 
-_ACTIONS = {
-    "open",
-    "close",
-    "execute",
-    "get_app_state",
-    "get_guidelines",
-    "get_screenshot",
-    "get_selection",
-    "revert",
-    "export_nodes",
-    "export_html",
-}
-
 
 def _screenshot_dir() -> str:
     root = os.path.join(
@@ -58,12 +43,7 @@ def _screenshot_dir() -> str:
 
 
 def _materialize_images(value: Any) -> Any:
-    """Replace embedded base64 image payloads with saved file paths.
-
-    pen's ``get_screenshot`` / ``TakeScreenshot()`` answers carry raw base64
-    image data. The agent reads images through vision, not through tool text,
-    so write them to ``~/.hermes/pen_canvas/`` and hand back the path.
-    """
+    """Replace embedded base64 image payloads with saved file paths."""
     if isinstance(value, dict):
         return {key: _materialize_images(item) for key, item in value.items()}
     if isinstance(value, list):
@@ -100,10 +80,8 @@ def pen_canvas_tool(
         return tool_error("pen_canvas is only available in the Hermes desktop app.")
 
     action = str(action or "").strip()
-    if action not in _ACTIONS:
-        return tool_error(
-            f"Unknown action {action!r}. One of: {', '.join(sorted(_ACTIONS))}."
-        )
+    if not action:
+        return tool_error("action is required.")
     if args is not None and not isinstance(args, dict):
         return tool_error("args must be an object.")
 
@@ -114,9 +92,8 @@ def pen_canvas_tool(
 
     if not raw:
         return tool_error(
-            "No answer from the desktop app — is a Canvas tab open (or the "
-            "pen.dev app running)? Open one with pen_canvas(action='open'), "
-            "or the operation timed out."
+            "No answer from the desktop app — is a Canvas tab open? "
+            "Open one with pen_canvas(action='open')."
         )
 
     try:
@@ -145,54 +122,31 @@ PEN_CANVAS_SCHEMA = {
     "name": "pen_canvas",
     "description": (
         "Design on a pen.dev canvas in the Hermes desktop app — the Canvas tab "
-        "beside this chat. You and the user share one live canvas: your edits "
-        "render instantly, and the user can draw alongside you with the full "
-        "editor. Actions: 'open' opens a Canvas tab (args: {name?: short "
-        "friendly title, path?: absolute .pen file, template?: name} — ALWAYS "
-        "pass `name` when creating a new canvas: 2-4 words from the design "
-        "brief, e.g. 'Robot factory dashboard' — it names the .pen file the "
-        "way chats get auto-titles; omit name only when opening an existing "
-        "path); 'close' "
-        "puts the canvas away (the file is untouched and stays in the "
-        "library); "
-        "'get_app_state' reads the document + editor state (args: "
-        "{include_schema, include_canvas_design, include_scripts_and_shaders}: "
-        "booleans — pass include_schema true on your first call to learn the "
-        ".pen node schema); 'get_guidelines' lists/loads design guides and "
-        "styles (args: {} to list, then {category: 'guide'|'style', name, "
-        "params?}); 'execute' runs pen's design JavaScript to insert/update/"
-        "delete/read nodes (args: {input: snippet} — e.g. hero=Insert(document,"
-        "{type:'frame',name:'Hero',x:0,y:0,width:1440,height:900,fill:'#0A0A0A'}); "
-        "on a failed snippet, patch it with {editId, edits:[{find,replace}]}); "
-        "'get_screenshot' renders a node to an image file you can view with "
-        "vision_analyze (args: {nodeId} or nodeId 'document' — expensive, use "
-        "after a section is done, not after every execute); 'get_selection' "
-        "reads what the user has selected RIGHT NOW in the editor (no args; "
-        "returns {nodes: [{id, name, type, bounds}]}) — call it whenever the "
-        "user says 'this'/'these'/'the selected one' so you act on their "
-        "actual selection instead of guessing from names; 'export_nodes' / "
-        "'export_html' write PNG/JPEG/WEBP/PDF or HTML files (args: pen's "
-        "export payloads: {nodeIds, outputDir|outputPath, format, ...}). "
-        "Workflow: open → get_app_state (schema) → get_guidelines → execute in "
-        "small steps → screenshot to verify. If no Canvas tab is open but the "
-        "user has the pen.dev desktop app running (e.g. Hermes is in HUD mode "
-        "over it), every action except 'open' reaches their live pen.dev "
-        "document directly — design there without opening a canvas."
+        "beside this chat. You and the user share one live canvas. "
+        "'open' opens a tab (args: {name?: 2-4 word title from the brief, "
+        "path?: absolute .pen file} — ALWAYS pass name when creating). "
+        "'close' puts the canvas away (file stays in the library). "
+        "Any other action is a live editor tool, forwarded verbatim; names "
+        "come from the editor, not from Hermes. Typical starting point: "
+        "get_app_state with include_schema true, then execute snippets. "
+        "Workflow: open → learn tools/state from the editor → edit in small "
+        "steps. If no Canvas tab is open, call open first."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "action": {
                 "type": "string",
-                "enum": sorted(_ACTIONS),
-                "description": "The canvas operation to run.",
+                "description": (
+                    "'open' or 'close' for the pane; any other string is an "
+                    "editor MCP tool name."
+                ),
             },
             "args": {
                 "type": "object",
                 "description": (
-                    "Arguments for the action, passed to the pen editor "
-                    "verbatim (see the per-action shapes in the tool "
-                    "description). Omit when the action needs none."
+                    "Arguments for the action, passed to the editor verbatim. "
+                    "Omit when the action needs none."
                 ),
             },
         },

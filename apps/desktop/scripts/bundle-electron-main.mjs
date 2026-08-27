@@ -23,12 +23,6 @@ const mainEntry = resolve(root, 'electron/main.ts')
 const mainOut = resolve(distDir, 'electron-main.mjs')
 const preloadEntry = resolve(root, 'electron/preload.ts')
 const preloadOut = resolve(distDir, 'electron-preload.js')
-const penPreloadEntry = resolve(root, 'electron/pen-preload.ts')
-// .cjs, not .js: the package is "type": "module", and an unsandboxed preload
-// loads through Node's module resolver — a .js preload would be parsed as ESM
-// and its CommonJS require() throws before a single line runs.
-const penPreloadOut = resolve(distDir, 'pen-preload.cjs')
-// The web-editor (app.pen.dev) embed-bridge port relay — see pen/web-bridge.ts.
 const penWebPreloadEntry = resolve(root, 'electron/pen-web-preload.ts')
 const penWebPreloadOut = resolve(distDir, 'pen-web-preload.cjs')
 
@@ -72,23 +66,9 @@ await build({
 })
 console.log(`bundled ${preloadOut}${isDev ? ' (dev)' : ''}`)
 
-// Bundle pen-preload.ts → dist/pen-preload.js (the pen.dev canvas webview's
-// electronAPI bridge — see electron/pen-canvas.ts)
-await build({
-  entryPoints: [penPreloadEntry],
-  bundle: true,
-  platform: 'node',
-  format: 'cjs',
-  target: 'node20',
-  outfile: penPreloadOut,
-  external,
-  define,
-  logLevel: 'info',
-})
-console.log(`bundled ${penPreloadOut}${isDev ? ' (dev)' : ''}`)
-
-// Bundle pen-web-preload.ts → dist/pen-web-preload.cjs (the app.pen.dev embed
-// bridge's MessagePort relay — see electron/pen/web-bridge.ts)
+// Bundle pen-web-preload.ts → dist/pen-web-preload.cjs (app.pen.dev MessagePort
+// relay — see electron/pen/web-bridge.ts). .cjs because the package is
+// "type": "module" and an unsandboxed preload loads through Node's resolver.
 await build({
   entryPoints: [penWebPreloadEntry],
   bundle: true,

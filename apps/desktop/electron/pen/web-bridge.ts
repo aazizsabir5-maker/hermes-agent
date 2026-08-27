@@ -1,33 +1,25 @@
-// The pen.dev WEB-editor embed bridge.
+// The pen.dev web-editor embed bridge.
 //
-// Where the bundle path (runtime.ts + device.ts) reimplements pen's host IPC
-// against the installed Pen.app, this speaks the hosted editor's documented
-// embed protocol over a MessagePort — nothing internal, versionless, and it
-// needs no local install. Contract: pen-embed-demo/README.md.
+// Speaks the hosted editor's documented embed protocol over a MessagePort —
+// nothing internal, versionless, no local install. Contract: pen-embed-demo.
 //
-// Shape:
 //   - main holds port1 of a MessageChannelMain; the web guest gets port2 via
 //     pen-web-preload's `pen:connect` relay.
 //   - editor → embedder requests are STORAGE (the embedder owns the document):
-//     storage-load / storage-write / storage-{read,write,has}-asset. We back
-//     them with the document's real .pen file + an assets/ folder beside it, so
-//     a web canvas is an ordinary library file (browse / autosave / checkpoints
-//     all keep working) rather than a page-local IndexedDB blob.
-//   - embedder → editor requests are the MCP surface: get-mcp-schema (the live
-//     tool list — discovered, never hardcoded) and mcp-tool-call (the agent's
-//     pen_canvas tool proxies through here).
+//     storage-load / storage-write / storage-{read,write,has}-asset, backed
+//     by the document's .pen file + an assets/ folder beside it.
+//   - embedder → editor requests are the MCP surface: get-mcp-schema (live
+//     tool list, never hardcoded) and mcp-tool-call (pen_canvas proxies here).
 //
-// One canvas at a time (the single-document invariant), so one live bridge.
+// One canvas at a time, so one live bridge.
 
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import type { PenDocument } from './state'
-import { documents, log } from './state'
+import { documents, events, log } from './state'
 
-// A response the editor can't produce yet (canvas still booting) or a
-// transport failure both surface as tool errors, never as thrown host code.
 const CONNECT_RETRY_MS = 500
 const REQUEST_TIMEOUT_MS = 120_000
 
@@ -39,17 +31,20 @@ interface PendingRequest {
 
 interface WebBridge {
   docId: string
-  port: any // MessagePortMain
+  guest: any
+  port: any
   ready: boolean
   connectTimer: ReturnType<typeof setInterval> | null
   pending: Map<string, PendingRequest>
   counter: number
+  theme: 'dark' | 'light'
 }
 
 let bridge: WebBridge | null = null
 
-/** Does this URL point at the hosted web editor? (origin match — query/path
- *  after `/new` vary). */
+events.on('close-document', () => shutdownPenWebBridge())
+
+/** Does this URL point at the hosted web editor? (origin match). */
 export function isPenWebUrl(url: string, webEditorUrl: string): boolean {
   try {
     return new URL(url).origin === new URL(webEditorUrl).origin
@@ -58,14 +53,8 @@ export function isPenWebUrl(url: string, webEditorUrl: string): boolean {
   }
 }
 
-function activeWebDoc(): PenDocument | null {
-  for (const doc of documents.values()) {
-    if (doc.web) {
-      return doc
-    }
-  }
-
-  return null
+function activeDoc(): PenDocument | null {
+  return [...documents.values()][0] ?? null
 }
 
 function docFilePath(doc: PenDocument): string | null {
@@ -77,7 +66,6 @@ function docFilePath(doc: PenDocument): string | null {
 }
 
 // Assets live in an assets/ folder beside the .pen, keyed by relative path.
-// Never escape that folder.
 function assetPath(doc: PenDocument, relativePath: string): string | null {
   const filePath = docFilePath(doc)
 
@@ -109,7 +97,7 @@ async function handleStorageRequest(doc: PenDocument, method: string, payload: a
     case 'storage-write': {
       await fs.promises.writeFile(filePath, payload.content)
 
-      return 0 // DocumentSaveResult.Saved
+      return 0
     }
 
     case 'storage-read-asset': {
@@ -160,14 +148,12 @@ async function handleStorageRequest(doc: PenDocument, method: string, payload: a
   }
 }
 
-/** Wire a freshly-attached web-editor guest: retry `pen:connect` (fresh port
- *  each attempt) until the page acks `ready`, then hold the port and serve
- *  storage + proxy tool calls. Idempotent per guest. */
+/** Wire a freshly-attached web-editor guest: retry `pen:connect` until ready. */
 export function bindPenWebGuest(guestContents: any, theme: 'dark' | 'light' = 'dark'): void {
-  const doc = activeWebDoc()
+  const doc = activeDoc()
 
   if (!doc) {
-    log.warn('web guest attached with no web document to bind')
+    log.warn('web guest attached with no document to bind')
 
     return
   }
@@ -189,11 +175,13 @@ export function bindPenWebGuest(guestContents: any, theme: 'dark' | 'light' = 'd
 
     bridge = {
       docId: doc.docId,
+      guest: guestContents,
       port: port1,
       ready: false,
       connectTimer: bridge?.connectTimer ?? null,
       pending: new Map(),
-      counter: 0
+      counter: 0,
+      theme
     }
 
     port1.on('message', (event: any) => {
@@ -209,7 +197,7 @@ export function bindPenWebGuest(guestContents: any, theme: 'dark' | 'light' = 'd
           bridge.ready = true
         }
 
-        log.info(`pen web canvas connected (${path.basename(docFilePath(doc) || doc.docId)})`)
+        log.info(`pen canvas connected (${path.basename(docFilePath(doc) || doc.docId)})`)
 
         return
       }
@@ -247,8 +235,6 @@ export function bindPenWebGuest(guestContents: any, theme: 'dark' | 'light' = 'd
     })
     port1.start()
 
-    // The editor only starts listening once its client bundle boots, so it
-    // always adopts the newest port — hence the fresh channel each attempt.
     guestContents.postMessage('pen-connect', { theme, fileURI: doc.fileURI }, [port2])
   }
 
@@ -262,10 +248,19 @@ export function bindPenWebGuest(guestContents: any, theme: 'dark' | 'light' = 'd
   guestContents.once?.('destroyed', () => shutdownPenWebBridge())
 }
 
-/** Send one embedder → editor request over the live port. */
+export function repaintPenWebTheme(theme: 'dark' | 'light'): void {
+  const guest = bridge?.guest
+
+  if (!guest || guest.isDestroyed?.()) {
+    return
+  }
+
+  bindPenWebGuest(guest, theme)
+}
+
 function bridgeRequest(method: string, payload?: unknown): Promise<unknown> {
   if (!bridge || !bridge.ready) {
-    return Promise.reject(new Error('the pen web canvas is not connected yet'))
+    return Promise.reject(new Error('the pen canvas is not connected yet'))
   }
 
   const port = bridge.port
@@ -287,8 +282,7 @@ interface McpToolResult {
   isError?: boolean
 }
 
-/** Run one canvas tool through the embed bridge's `mcp-tool-call`, mapped to a
- *  PenToolResult. Used by runPenTool's web branch. */
+/** Run one canvas tool through `mcp-tool-call`. */
 export async function runWebPenTool(
   name: string,
   args: Record<string, unknown>
@@ -310,11 +304,6 @@ export async function runWebPenTool(
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) }
   }
-}
-
-/** The live tool list from the canvas (discovered at connect; never hardcoded). */
-export async function penWebToolSchema(): Promise<unknown> {
-  return bridgeRequest('get-mcp-schema')
 }
 
 export function shutdownPenWebBridge(): void {

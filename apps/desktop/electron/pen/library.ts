@@ -1,34 +1,13 @@
-// Canvas library + status: what canvases exist (~/.hermes/pens), opening
-// documents, pen availability/login/icon for the renderer.
+// Canvas library + status: what canvases exist, opening documents, availability
+// for the renderer. Always available — the hosted editor needs no local install.
 
-import { randomUUID } from 'node:crypto'
-import { EventEmitter } from 'node:events'
-import fs from 'node:fs'
-import net from 'node:net'
-import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 
-import {
-  deletePenFromLibrary,
-  findPenInstallation,
-  listPenLibrary,
-  PEN_SOCKET_APP_NAME,
-  type PenInstallation,
-  penLibraryPathFor,
-  type PenLibraryEntry,
-  penLibraryRoot,
-  penLoggedIn,
-  penSessionFilePath,
-  penTemporaryDocumentsRoot,
-  penWebEditorEnabled,
-  renamePenInLibrary,
-  requirePenModule
-} from '../pen-host'
+import { deletePenFromLibrary, listPenLibrary, type PenLibraryEntry, penLibraryRoot, penWebEditorUrl, renamePenInLibrary } from '../pen-host'
 
-import { closeDocument, createLibraryDocument, createWebDocument, describeDocument, documentIsOpen, openDocumentByUri } from './documents'
-import { documents, log, type PenDocumentInfo, runtime } from './state'
-import { ensureRuntime } from './runtime'
+import { closeDocument, createDocument, describeDocument, openDocument } from './documents'
+import { documents, type PenDocumentInfo } from './state'
 
 export interface PenStatus {
   available: boolean
@@ -36,60 +15,17 @@ export interface PenStatus {
   version: string
   running: boolean
   openDocuments: PenDocumentInfo[]
-  /** pen.dev's own app icon as a data URL, read at RUNTIME from the user's
-   *  installed Pen.app — never bundled (their asset, upstream wins). Null
-   *  when pen isn't installed; consumers fall back to a house glyph. */
+  /** Always null — no Pen.app icon to borrow. Renderer falls back to a glyph. */
   icon: null | string
 }
 
-let penIconCache: null | string = null
-let penIconPending: null | Promise<null | string> = null
-
-/** pen.dev's app icon as a data URL, decoded by macOS from the user's
- *  installed Pen.app (app.getFileIcon). Cached forever after the first hit —
- *  the icon can't change without a pen update, which relaunches us anyway. */
-export function penIconDataUrl(installPath: null | string | undefined): Promise<null | string> {
-  if (penIconCache || !installPath) {
-    return Promise.resolve(penIconCache)
-  }
-
-  if (!penIconPending) {
-    penIconPending = (async () => {
-      try {
-        const { app: electronApp } = require('electron')
-        const image = await electronApp.getFileIcon(installPath, { size: 'normal' })
-
-        if (image && !image.isEmpty()) {
-          penIconCache = image.toDataURL()
-        }
-      } catch {
-        // Icon is decoration; never let it break status.
-      }
-
-      return penIconCache
-    })()
-  }
-
-  return penIconPending
-}
-
 export function penStatus(): PenStatus {
-  const install = runtime?.install ?? findPenInstallation()
-
-  // Kick the async prime; the resolved value rides the NEXT status call.
-  // hermes:pen:status in main awaits properly, so renderers see it on the
-  // first call anyway — this sync path only serves in-process callers.
-  void penIconDataUrl(install?.appPath)
-
-  // Web-editor mode needs no local install: the hosted editor IS the canvas.
-  const webMode = penWebEditorEnabled()
-
   return {
-    available: webMode || Boolean(install),
-    loggedIn: webMode || penLoggedIn(),
-    version: install?.version ?? '',
-    running: webMode || Boolean(runtime),
-    icon: penIconCache,
+    available: true,
+    loggedIn: true,
+    version: '',
+    running: documents.size > 0,
+    icon: null,
     openDocuments: [...documents.values()].map(describeDocument)
   }
 }
@@ -99,28 +35,21 @@ export async function openPenCanvas(options: {
   path?: string
   template?: string
 }): Promise<PenDocumentInfo> {
-  // Web-editor mode: the hosted editor owns documents (IndexedDB), so there is
-  // no local .pen file to open or template to copy — just a tab to track.
-  if (penWebEditorEnabled()) {
-    return createWebDocument(options.name)
-  }
-
   if (options.path) {
-    const resolved = path.resolve(options.path)
-
-    return openDocumentByUri(pathToFileURL(resolved).href)
+    return openDocument(options.path)
   }
 
-  return createLibraryDocument(options.template || 'pencil-new.pen', options.name)
+  return createDocument(options.name)
 }
 
-// ---------------------------------------------------------------------------
-// Canvas library — browse / rename / delete the user's canvases.
-// ---------------------------------------------------------------------------
+/** URL the renderer webview loads. Same hosted editor for every document;
+ *  the embed bridge supplies the file via storage-load. */
+export function penCanvasUrl(_docId?: string): string {
+  return penWebEditorUrl()
+}
 
 export interface PenLibraryItem extends PenLibraryEntry {
-  /** Open in the drawer right now (so the UI can show it as active and
-   *  refuse to delete it out from under itself). */
+  /** Open in the pane right now. */
   open: boolean
   /** The live document id, when open. */
   docId: null | string
@@ -146,8 +75,7 @@ export function penLibrary(): { items: PenLibraryItem[]; root: string } {
   return { items, root: penLibraryRoot() }
 }
 
-/** Delete a canvas. Closes the live document first — deleting the file out
- *  from under an open editor is how you get a save that resurrects it. */
+/** Delete a canvas. Closes the live document first. */
 export function deletePenCanvas(target: string): boolean {
   const resolved = path.resolve(target)
 
@@ -165,8 +93,7 @@ export function deletePenCanvas(target: string): boolean {
   return deletePenFromLibrary(resolved)
 }
 
-/** Rename a canvas. Refuses while it's open, for the same reason as delete:
- *  the editor holds the old path and would write it back. */
+/** Rename a canvas. Refuses while it's open. */
 export function renamePenCanvas(target: string, nextName: string): null | string {
   const resolved = path.resolve(target)
 

@@ -1,219 +1,24 @@
-// pen.dev host discovery — the Electron-free half of the Pen canvas
-// integration. Locates the user's installed pen.dev desktop app and exposes
-// the paths hermes borrows from it at runtime:
+// Canvas library on disk + the hosted editor URL.
 //
-//   - `out/editor/`   — the full canvas editor web bundle (served over the
-//                       hermes-pen:// protocol into our <webview>)
-//   - `@ha/*` modules — the host-side IPC/device libraries (required straight
-//                       from the asar; they are plain CJS)
-//   - `out/mcp-server-<platform>` — the MCP stdio binary the agent uses to
-//                       drive a live canvas over the pencil socket
-//   - `out/data/*.pen` — the document templates (blank canvas, design kits)
-//
-// Nothing is vendored: pen.dev updates itself, and hermes always hosts
-// whatever version the user has installed. When Pen isn't installed the
-// integration reports unavailable and every door stays closed.
+// Hermes owns `.pen` files under `$HERMES_HOME/pens`. The editor is
+// app.pen.dev's embed (`/new?embed`); storage and tools go over the
+// MessagePort in pen/web-bridge.ts. No Pen.app, no vendored bundle.
 
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-/** The socket app name hermes registers with. `pen interactive -a hermes` and
- *  `mcp-server --app hermes` both resolve `~/.pencil/socket/pencil-hermes.sock`
- *  from this name (see @ha/ipc getSocketPath). */
-export const PEN_SOCKET_APP_NAME = 'hermes'
-
-// ---------------------------------------------------------------------------
-// Web editor mode (experimental) — embed pen.dev's HOSTED editor instead of
-// borrowing the installed Pen.app bundle.
-//
-// The bundle path (findPenInstallation + @ha/* host IPC) hardcodes pen.dev's
-// internal abstractions into hermes and breaks whenever they refactor tools
-// upstream. Their guidance: host the web editor (app.pen.dev), which owns its
-// own tools (WebMCP) and persistence (IndexedDB), so nothing internal is
-// vendored and users without the desktop app still get a canvas.
-//
-// Opt-in while the agent<->editor tool bridge is still being defined with the
-// Pencil team: set `HERMES_PEN_WEB=1`. The URL is overridable for dev/staging.
-// ---------------------------------------------------------------------------
-
-/** Default hosted pen.dev editor, in EMBED mode: `/new?embed` renders no local
- *  document UI and drives storage + tools over a MessagePort (see
- *  pen/web-bridge.ts). Hermes owns the document, so persistence is our on-disk
- *  library, not the page's IndexedDB. */
 const PEN_WEB_EDITOR_DEFAULT_URL = 'https://app.pen.dev/new?embed'
 
-/** True when hermes should embed the hosted web editor rather than the
- *  installed Pen.app bundle. Off by default — the bundle path stays the
- *  shipping default until the web tool bridge lands. */
-export function penWebEditorEnabled(): boolean {
-  return process.env.HERMES_PEN_WEB === '1' || process.env.HERMES_PEN_WEB === 'true'
-}
-
-/** The hosted editor URL to embed. Overridable via HERMES_PEN_WEB_URL for
- *  dev/staging or a partner-customized embed build. */
+/** Hosted editor URL. `HERMES_PEN_WEB_URL` overrides for staging. */
 export function penWebEditorUrl(): string {
   return process.env.HERMES_PEN_WEB_URL || PEN_WEB_EDITOR_DEFAULT_URL
 }
 
-export interface PenInstallation {
-  /** /Applications/Pen.app */
-  appPath: string
-  /** …/Contents/Resources/app.asar */
-  asarPath: string
-  /** …/Contents/Resources/app.asar.unpacked — folderPath for getMcpConfiguration */
-  unpackedPath: string
-  /** …/app.asar/out/editor — the editor web bundle root */
-  editorRoot: string
-  /** …/app.asar/out/data — .pen templates */
-  templatesRoot: string
-  /** …/app.asar.unpacked/out/mcp-server-<platform> */
-  mcpServerPath: string
-  /** Pen.app bundle version (best effort, '' when unreadable) */
-  version: string
-}
-
-function mcpBinaryName(): string {
-  const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
-
-  if (process.platform === 'win32') {
-    return `mcp-server-windows-${arch}.exe`
-  }
-
-  if (process.platform === 'darwin') {
-    return `mcp-server-darwin-${arch}`
-  }
-
-  return `mcp-server-linux-${arch}`
-}
-
-/** Candidate install locations, most specific first. */
-function penAppCandidates(): string[] {
-  if (process.platform === 'darwin') {
-    return [
-      path.join('/Applications', 'Pen.app'),
-      path.join(os.homedir(), 'Applications', 'Pen.app')
-    ]
-  }
-
-  // Linux/Windows installs land in per-user dirs; resources sit beside the
-  // executable. Not wired yet — macOS is the only host we probe today.
-  return []
-}
-
-function readBundleVersion(appPath: string): string {
-  try {
-    const plist = fs.readFileSync(path.join(appPath, 'Contents', 'Info.plist'), 'utf8')
-    const match = plist.match(/<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/)
-
-    return match?.[1] ?? ''
-  } catch {
-    return ''
-  }
-}
-
-/** The editor bundle to serve, as an ordered ladder:
- *
- *    1. HERMES_PEN_EDITOR_ROOT        — explicit override, dev/testing
- *    2. ~/.hermes/pen/editor          — the BLESSED bundle: pen.dev hands
- *                                       partners the editor as a plain static
- *                                       dir (their pen-plugin zip); a symlink
- *                                       here decouples us from Pen.app's asar
- *                                       and from needing Pen.app at all for
- *                                       the canvas surface.
- *    3. Pen.app's asar (out/editor)   — the original recon path, still the
- *                                       floor so nothing regresses without
- *                                       the plugin.
- *
- *  A candidate is trusted only if its index.html actually exists — existence
- *  of the directory is not proof (dangling symlink, half-unzipped bundle). */
-function resolveEditorRoot(asarEditorRoot: string): string {
-  const candidates = [
-    process.env.HERMES_PEN_EDITOR_ROOT || '',
-    path.join(os.homedir(), '.hermes', 'pen', 'editor')
-  ]
-
-  for (const candidate of candidates) {
-    if (candidate && fs.existsSync(path.join(candidate, 'index.html'))) {
-      return candidate
-    }
-  }
-
-  return asarEditorRoot
-}
-
-/** Locate the installed pen.dev desktop app, or null. Cheap enough to call on
- *  demand; existence is validated at every layer that relies on it. */
-export function findPenInstallation(): PenInstallation | null {
-  for (const appPath of penAppCandidates()) {
-    const resources = path.join(appPath, 'Contents', 'Resources')
-    const asarPath = path.join(resources, 'app.asar')
-    const unpackedPath = path.join(resources, 'app.asar.unpacked')
-    const mcpServerPath = path.join(unpackedPath, 'out', mcpBinaryName())
-
-    // fs sees INTO the asar from Electron (asar support is patched into fs),
-    // but the asar file itself is a real file for existsSync.
-    if (!fs.existsSync(asarPath) || !fs.existsSync(mcpServerPath)) {
-      continue
-    }
-
-    return {
-      appPath,
-      asarPath,
-      unpackedPath,
-      editorRoot: resolveEditorRoot(path.join(asarPath, 'out', 'editor')),
-      templatesRoot: path.join(asarPath, 'out', 'data'),
-      mcpServerPath,
-      version: readBundleVersion(appPath)
-    }
-  }
-
-  return null
-}
-
-/** Require one of Pen's host-side CJS modules straight out of its asar.
- *  Electron's patched `require`/`fs` read archive members transparently, so
- *  `@ha/ipc`, `@ha/shared`, and `@node-ipc/*` (all plain CJS dists) load as if
- *  they were on disk. The caller owns error handling — a Pen update could in
- *  principle move these, and the integration must degrade to "unavailable",
- *  never crash the app. */
-export function requirePenModule(install: PenInstallation, modulePath: string): any {
-   
-  return require(path.join(install.asarPath, 'node_modules', modulePath))
-}
-
-/** Pen's session file — shared with Pen.app so one login covers both. */
-export function penSessionFilePath(): string {
-  return path.join(os.homedir(), '.pencil', 'session-desktop.json')
-}
-
-/** True when a pen.dev login token exists (Pen.app or `pen login`). */
-export function penLoggedIn(): boolean {
-  try {
-    const session = JSON.parse(fs.readFileSync(penSessionFilePath(), 'utf8'))
-
-    return Boolean(session?.email && session?.token)
-  } catch {
-    return false
-  }
-}
-
-/** Where hermes keeps its temporary (unsaved) canvas documents. Mirrors Pen's
- *  own ~/.pencil/documents/<uuid>/ layout — same folder family, so pen.dev's
- *  recents/cleanup conventions treat them like any other temporary doc. */
-export function penTemporaryDocumentsRoot(): string {
-  return path.join(os.homedir(), '.pencil', 'documents')
-}
-
-/** The canvas LIBRARY — where hermes's own canvases live so they can be
- *  browsed, reopened, renamed, and deleted like any other artifact.
- *
- *  A temporary document (pen's ~/.pencil/documents/<uuid>/) is invisible and
- *  effectively disposable: nothing lists it and a restart strands it. Canvases
- *  created in hermes land here instead, one folder per canvas, so "my pens"
- *  is a real place on disk the user can also open in Pen.app or put in git. */
 export function penLibraryRoot(): string {
-  return path.join(os.homedir(), '.hermes', 'pens')
+  const home = process.env.HERMES_HOME || path.join(os.homedir(), '.hermes')
+
+  return path.join(home, 'pens')
 }
 
 export interface PenLibraryEntry {
@@ -224,13 +29,11 @@ export interface PenLibraryEntry {
   name: string
   modifiedAt: number
   size: number
-  /** Rendered canvas preview (preview.png beside the .pen, written from the
-   *  editor's save-preview pushes), when one exists. */
+  /** Rendered canvas preview (preview.png beside the .pen), when one exists. */
   previewPath: null | string
 }
 
-/** Every canvas in the library, newest first. One shallow scan — the library
- *  is one folder per canvas, not an arbitrary tree. */
+/** Every canvas in the library, newest first. One folder per canvas. */
 export function listPenLibrary(): PenLibraryEntry[] {
   const root = penLibraryRoot()
   const entries: PenLibraryEntry[] = []
@@ -286,8 +89,7 @@ export function listPenLibrary(): PenLibraryEntry[] {
   return entries.sort((a, b) => b.modifiedAt - a.modifiedAt)
 }
 
-/** Reserve a path in the library for a new canvas. Never overwrites: a name
- *  collision gets a numeric suffix, the way a file manager would. */
+/** Reserve a path in the library for a new canvas. Never overwrites. */
 export function penLibraryPathFor(name: string): string {
   const safe =
     name
@@ -309,9 +111,7 @@ export function penLibraryPathFor(name: string): string {
   return path.join(root, `${safe} ${Date.now()}`, `${safe}.pen`)
 }
 
-/** Delete a canvas — the whole folder, since that's what a canvas IS on disk.
- *  Refuses anything outside the library so a bad path can't take a user
- *  directory with it. */
+/** Delete a canvas — the whole folder. Refuses anything outside the library. */
 export function deletePenFromLibrary(target: string): boolean {
   const root = penLibraryRoot()
   const folder = target.endsWith('.pen') ? path.dirname(target) : target
@@ -330,8 +130,7 @@ export function deletePenFromLibrary(target: string): boolean {
   }
 }
 
-/** Rename a canvas: the .pen and its folder move together, so the library
- *  stays one-folder-per-canvas. Returns the new path. */
+/** Rename a canvas: the .pen and its folder move together. Returns the new path. */
 export function renamePenInLibrary(target: string, nextName: string): null | string {
   const root = path.resolve(penLibraryRoot())
   const current = path.resolve(target)
@@ -348,7 +147,6 @@ export function renamePenInLibrary(target: string, nextName: string): null | str
 
     const oldFolder = path.dirname(current)
 
-    // Drop the now-empty folder the canvas came from.
     try {
       if (fs.readdirSync(oldFolder).length === 0) {
         fs.rmdirSync(oldFolder)

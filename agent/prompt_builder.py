@@ -890,10 +890,8 @@ def hud_surface_note(valid_tool_names: "set[str] | None" = None) -> str:
             )
     if "pen_canvas" in names:
         sentences.append(
-            "When the app underneath is pen.dev, design with pen_canvas — "
-            "every action except 'open' reaches their live pen.dev document "
-            "directly, so skip opening a Canvas tab and never reach for "
-            "screenshots or clicks to edit a design."
+            "When the app underneath is pen.dev, design with pen_canvas on "
+            "the Canvas tab beside this chat — open one if it isn't already."
         )
     sentences.append(
         "This is a prior, not a rule: when the request names its own target, "

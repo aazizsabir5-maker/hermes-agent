@@ -1,11 +1,9 @@
 /**
- * The pen canvas pane body: a <webview> on hermes-pen://, chromeless.
+ * The pen canvas pane body: a <webview> on app.pen.dev, chromeless.
  *
- * The webview fills the pane completely — pen's own toolbar/canvas/panels ARE
- * the pane content, with hermes contributing only the tree tab above it (which
- * carries the title, the close ✕, drag/split/stack). Host chrome inside the
- * editor page (hide pen's agent, blend background, UI scale) is injected by
- * the hermes-pen:// protocol handler in main, not here.
+ * The webview fills the pane completely — pen's toolbar/canvas ARE the pane
+ * content, with hermes contributing only the tree tab above it. The embed
+ * preload is assigned by main's will-attach-webview hook, not here.
  */
 
 import { useEffect, useRef } from 'react'
@@ -29,9 +27,8 @@ export function PenTilePane({ docId }: { docId: string }) {
     const webview = document.createElement('webview')
 
     webview.setAttribute('src', tab.url)
-    // The pen host preload is assigned by main's will-attach-webview hook
-    // (keyed off the hermes-pen:// src), so no preload attribute here — the
-    // renderer never learns filesystem paths.
+    // The embed-bridge preload is assigned by main's will-attach-webview hook
+    // (keyed off the app.pen.dev origin), so no preload attribute here.
     webview.style.cssText = 'width:100%;height:100%;border:0;background:transparent'
 
     host.append(webview)

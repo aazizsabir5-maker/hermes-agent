@@ -252,32 +252,21 @@ import {
   runPrimaryBackendStartup
 } from './primary-backend-startup'
 import { rehomePrimaryConnection } from './primary-connection-rehome'
-import { findPenInstallation, penWebEditorEnabled, penWebEditorUrl } from './pen-host'
+import { penWebEditorUrl } from './pen-host'
 import {
   bindPenWebGuest,
-  bindPenWebview,
-  closeDocument as closePenDocument,
   closeOtherPenDocuments,
   deletePenCanvas,
   documentIsOpen,
-  handlePenProtocolRequest,
-  isPenAgentHidden,
   isPenWebUrl,
   onPenEvent,
   openPenCanvas,
-  PEN_PROTOCOL,
-  penAgentScript,
   penCanvasUrl,
-  penHostChromeScript,
-  penIconDataUrl,
   penLibrary,
   penStatus,
   renamePenCanvas,
-  repaintPenTheme,
-  runPenGuestScript,
+  repaintPenWebTheme,
   runPenTool,
-  setPenAgentHidden,
-  setPenHostChrome,
   shutdownPenHost
 } from './pen'
 import {
@@ -1293,20 +1282,6 @@ protocol.registerSchemesAsPrivileged([
       stream: true,
       supportFetchAPI: true
     }
-  },
-  {
-    // The pen.dev canvas editor bundle, served out of the user's installed
-    // Pen.app (see pen-canvas.ts). Standard+secure so the editor's module
-    // scripts, wasm fetches, and worker spawns behave like an https origin —
-    // the same privileges Pen's own `pencil://` scheme claims.
-    scheme: PEN_PROTOCOL,
-    privileges: {
-      corsEnabled: true,
-      secure: true,
-      standard: true,
-      stream: true,
-      supportFetchAPI: true
-    }
   }
 ])
 
@@ -1354,18 +1329,11 @@ function registerMediaProtocol() {
 }
 
 // ---------------------------------------------------------------------------
-// Pen canvas (pen.dev) — hermes hosts the user's installed pen.dev editor.
-// All the host logic lives in pen-canvas.ts; this block is the Electron doors:
-// the protocol, the IPC surface, and the canvas DRAWER.
-//
-// The canvas is an ATTACHED CHILD WINDOW glued to the host's right edge —
-// see the block comment above bindPenGuest for the architecture history.
-// (WebContentsView + renderer inset) was measured unworkable. The renderer
-// never changes layout for the canvas at all.
+// Pen canvas — embed app.pen.dev/new?embed in a layout-tree pane.
+// Session ties, library, and the webview bind live here; document + MessagePort
+// protocol live in electron/pen/.
 // ---------------------------------------------------------------------------
 
-const PEN_PRELOAD_PATH = path.join(APP_ROOT, 'dist', 'pen-preload.cjs')
-// The web-editor (app.pen.dev/new?embed) embed-bridge port relay.
 const PEN_WEB_PRELOAD_PATH = path.join(APP_ROOT, 'dist', 'pen-web-preload.cjs')
 
 // Which chat session opened each live document — the tie that lets a save-as
@@ -1467,8 +1435,8 @@ function penDocumentPath(doc) {
   }
 }
 
-function registerPenProtocol() {
-  protocol.handle(PEN_PROTOCOL, request => handlePenProtocolRequest(request, electronNet))
+function penWebTheme() {
+  return nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
 }
 
 function broadcastPenEvent(event, payload) {
@@ -1479,92 +1447,43 @@ function broadcastPenEvent(event, payload) {
   }
 }
 
-/**
- * THE CANVAS IS A LAYOUT-TREE PANE (third architecture; the other two are
- * documented failures):
- *
- *   1. WebContentsView overlay + renderer inset — `position: fixed` sizes
- *      against the viewport by spec, so every overlay (palette, pickers,
- *      menus) drew under the canvas, and react-remove-scroll fought the
- *      body-margin inset. Unfixable in principle.
- *   2. Attached child window — layout worked, but two OS windows can never
- *      read as one surface: separate shadows, separate corner radii, a
- *      visible seam. Rejected on sight.
- *
- * Now the editor loads in a <webview> INSIDE a normal layout-tree pane
- * (src/app/chat/pen-tile.tsx), the same way URL previews host theirs — the
- * tree owns sizing/sashes/tabs/theme, DOM overlays stack above it natively,
- * and pen.dev's own VS Code extension embeds the editor the same way.
- * Main's remaining jobs: create/serve documents (hermes-pen://), bind an
- * attaching guest to its document IPC, remember session ties, autosave.
- */
 function bindPenGuest(guestContents) {
-  // Web-editor guest (app.pen.dev/new?embed): drive it over the embed bridge
-  // (MessagePort) instead of the bundle's hermes-pen:// IPC. Bind on navigate
-  // too — the page reloads on file switch and must re-run the handshake.
-  const isWebGuest = () => penWebEditorEnabled() && isPenWebUrl(guestContents.getURL?.() || '', penWebEditorUrl())
+  const isWebGuest = () => isPenWebUrl(guestContents.getURL?.() || '', penWebEditorUrl())
 
-  if (isWebGuest()) {
-    guestContents.on('did-navigate', () => {
-      if (isWebGuest()) {
-        bindPenWebGuest(guestContents)
-      }
-    })
-    bindPenWebGuest(guestContents)
-
-    try {
-      guestContents.setBackgroundColor(getWindowBackgroundColor())
-    } catch {
-      // Cosmetic.
-    }
-
+  if (!isWebGuest()) {
     return
   }
 
-  // A guest attaches before it navigates, so the hermes-pen:// URL (and its
-  // ?doc= id) isn't real yet at attach time. Bind on every navigation —
-  // bindPenWebview is idempotent per guest and ignores non-pen URLs.
-  guestContents.on('did-navigate', () => bindPenWebview(guestContents))
-  bindPenWebview(guestContents)
+  guestContents.on('did-navigate', () => {
+    if (isWebGuest()) {
+      bindPenWebGuest(guestContents, penWebTheme())
+    }
+  })
+  bindPenWebGuest(guestContents, penWebTheme())
 
-  // The guest's OWN paint layer defaults to black, and it shows through
-  // whenever pen's page leaves transparency (boot, pan past the pasteboard
-  // edge, resize). That black-behind-the-canvas is a compositor layer no CSS
-  // in the page or the host renderer can reach — only the webContents API.
   try {
     guestContents.setBackgroundColor(getWindowBackgroundColor())
   } catch {
     // Cosmetic.
   }
-
 }
 
-/** Give hermes-pen:// <webview> guests the pen host preload (the
- *  window.electronAPI bridge the editor detects its host through), and bind
- *  each attached guest to its document's IPC. app-level, once. */
 function wirePenWebviewGuests() {
   app.on('web-contents-created', (_event, contents) => {
     contents.on('will-attach-webview', (_e, webPreferences, params) => {
       const src = String(params.src || '')
 
-      if (src.startsWith(`${PEN_PROTOCOL}://`)) {
-        webPreferences.preload = PEN_PRELOAD_PATH
-        webPreferences.contextIsolation = true
-        webPreferences.nodeIntegration = false
-        webPreferences.sandbox = false
-      } else if (penWebEditorEnabled() && isPenWebUrl(src, penWebEditorUrl())) {
-        // Web-editor guest: the relay preload forwards the embed-bridge port
-        // into the page's main world (pen-web-preload.ts). contextIsolation
-        // stays on; the page is remote, so keep node integration off.
-        webPreferences.preload = PEN_WEB_PRELOAD_PATH
-        webPreferences.contextIsolation = true
-        webPreferences.nodeIntegration = false
-        webPreferences.sandbox = false
+      if (!isPenWebUrl(src, penWebEditorUrl())) {
+        return
       }
+
+      webPreferences.preload = PEN_WEB_PRELOAD_PATH
+      webPreferences.contextIsolation = true
+      webPreferences.nodeIntegration = false
+      webPreferences.sandbox = false
     })
 
     contents.on('did-attach-webview', (_e, guest) => {
-      // bindPenGuest ignores non-pen URLs itself, so no gate needed here.
       bindPenGuest(guest)
     })
   })
@@ -1573,7 +1492,7 @@ function wirePenWebviewGuests() {
 function wirePenCanvas() {
   // Host-side events (a save-as re-homing a document, canvas "add to chat",
   // pen-side agents connecting) fan out to every window.
-  for (const event of ['open-document', 'close-document', 'dirty-changed', 'add-to-chat']) {
+  for (const event of ['open-document', 'close-document']) {
     onPenEvent(event, payload => broadcastPenEvent(event, payload))
   }
 
@@ -1596,22 +1515,11 @@ function wirePenCanvas() {
   })
 
   ipcMain.handle('hermes:pen:status', async () => {
-    const status = penStatus()
-
-    // Await the icon so the FIRST status a renderer sees already carries it —
-    // the sync penStatus() only reads the cache.
-    const icon = await penIconDataUrl(findPenInstallation()?.appPath)
-
-    return { ...status, icon }
+    return penStatus()
   })
 
   ipcMain.handle('hermes:pen:open', async (_event, options) => {
     const { projectId, sessionId, ...openOptions } = options || {}
-
-    // Freshen the host chrome the protocol handler injects into the editor
-    // page (background blend + UI scale), so a canvas opened after a theme or
-    // zoom change boots matching the app instead of a stale snapshot.
-    setPenHostChrome({ background: getWindowBackgroundColor() })
 
     const doc = await openPenCanvas(openOptions)
 
@@ -1627,8 +1535,6 @@ function wirePenCanvas() {
 
     rememberPenSession(sessionId, { docId: doc.docId, path: penDocumentPath(doc) || openOptions.path || null, projectId: projectId || null, closed: false })
 
-    // `url` is what the renderer's pen tile mounts in its <webview>. Built
-    // here so the hermes-pen:// shape stays main's private detail.
     return { doc, url: penCanvasUrl(doc.docId) }
   })
 
@@ -1696,8 +1602,6 @@ function wirePenCanvas() {
       rememberPenSession(sessionId, { docId: entry.docId, path: entry.path, projectId, closed: false })
     }
 
-    setPenHostChrome({ background: getWindowBackgroundColor() })
-
     if (documentIsOpen(entry.docId)) {
       for (const closedId of closeOtherPenDocuments(entry.docId)) {
         penDocSessions.delete(closedId)
@@ -1726,19 +1630,6 @@ function wirePenCanvas() {
 
     return { doc, url: penCanvasUrl(doc.docId) }
   })
-
-  /** Show/hide pen's own agent inside the canvas. Applies to the open canvas
-   *  immediately and to every canvas opened after. */
-  ipcMain.handle('hermes:pen:agent-visible', (_event, visible) => {
-    const hidden = !visible
-
-    setPenAgentHidden(hidden)
-    void runPenGuestScript(penAgentScript(hidden))
-
-    return { hidden }
-  })
-
-  ipcMain.handle('hermes:pen:agent-hidden', () => isPenAgentHidden())
 
   /** The canvas library: browse, rename, delete. `~/.hermes/pens/<name>/`.
    *  Enriched with each canvas's chat-session tie, so the browser can say
@@ -15110,11 +15001,8 @@ ipcMain.on('hermes:native-theme', (_event, mode) => {
     writePersistedThemeSource(mode)
   }
 
-  // The canvas blends with the app's chrome, so a theme flip re-paints every
-  // live canvas guest rather than waiting for a reopen — background AND pen's
-  // own dark/light kind (repaintPenTheme nudges the editor when it flips).
-  setPenHostChrome({ background: getWindowBackgroundColor() })
-  void repaintPenTheme()
+  // Canvas guest follows the app theme via the embed handshake.
+  repaintPenWebTheme(penWebTheme())
 })
 
 // See-through window translucency. Persist + re-apply to every open window at
@@ -15999,7 +15887,6 @@ app.whenReady().then(() => {
   installMediaPermissions()
   installDownloadHandling()
   registerMediaProtocol()
-  registerPenProtocol()
   wirePenCanvas()
   wirePenWebviewGuests()
   installEmbedReferer()
@@ -16128,9 +16015,7 @@ app.on('before-quit', event => {
     return
   }
 
-  // Release the pencil-hermes socket so a relaunch (or pen.dev's own tooling)
-  // never meets a stale file. Synchronous and idempotent — safe to run ahead
-  // of the async backend teardown below (which re-enters via app.quit()).
+  // Drop the embed-bridge port so a relaunch doesn't meet a stale handshake.
   shutdownPenHost()
 
   if (!backendQuitTeardownDone) {

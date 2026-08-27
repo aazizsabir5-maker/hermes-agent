@@ -1,33 +1,16 @@
-// Pen canvas host — hermes as a pen.dev host application.
+// Pen canvas host — Hermes embeds pen.dev's hosted editor.
 //
-// The pen.dev editor is a self-contained web bundle that speaks one JSON IPC
-// protocol to whatever hosts it (their Electron app, the VS Code webview, the
-// headless CLI). This package makes hermes one of those hosts:
+//   - library.ts    canvas files (~/.hermes/pens) + status / open / rename
+//   - documents.ts  create / open / close (one live document)
+//   - web-bridge.ts MessagePort embed protocol (storage + mcp-tool-call)
+//   - tools.ts      agent tool proxy (forwards to the live editor schema)
+//   - state.ts      document registry + event feed
 //
-//   - protocol.ts  serves the editor bundle over hermes-pen:// (blessed
-//                  partner bundle or the user's installed Pen.app — upstream
-//                  wins, nothing vendored)
-//   - device.ts    implements the host side of the editor IPC (ResourceDevice)
-//   - documents.ts owns document lifecycle + autosave (library files from
-//                  birth; ONE live document; closing always flushes)
-//   - webview.ts   binds <webview> guests to their document IPC
-//   - chrome.ts    blends the editor into hermes (theme, agent-UI hiding,
-//                  injected boot assets, presence cursor markup)
-//   - library.ts   the canvas library (~/.hermes/pens) + status/icon doors
-//   - tools.ts     the agent tool surface (execute/get_app_state/…,
-//                  presence cursor placement, live selection reads)
-//   - runtime.ts   lazy bring-up/teardown of pen's transport + device manager
-//   - state.ts     the shared mutable core every sibling leans on
-//
-// Everything degrades to "unavailable" when Pen.app is missing; nothing
-// throws at import time and nothing runs until the first canvas opens.
+// The renderer loads app.pen.dev/new?embed in a <webview>. Hermes owns the
+// .pen file; the editor talks to us over the documented embed port.
 
-export { isPenAgentHidden, penAgentScript, penHostChromeScript, repaintPenTheme, setPenAgentHidden, setPenHostChrome } from './chrome'
-export { closeDocument, closeOtherPenDocuments, documentIsOpen } from './documents'
-export { deletePenCanvas, openPenCanvas, penIconDataUrl, penLibrary, type PenLibraryItem, penStatus, type PenStatus, renamePenCanvas } from './library'
-export { handlePenProtocolRequest, PEN_PROTOCOL, penCanvasUrl } from './protocol'
-export { shutdownPenHost } from './runtime'
+export { closeDocument, closeOtherPenDocuments, documentIsOpen, shutdownPenHost } from './documents'
+export { deletePenCanvas, openPenCanvas, penCanvasUrl, penLibrary, type PenLibraryItem, penStatus, type PenStatus, renamePenCanvas } from './library'
 export { onPenEvent, type PenDocumentInfo } from './state'
 export { type PenToolResult, runPenTool } from './tools'
-export { bindPenWebGuest, isPenWebUrl, shutdownPenWebBridge } from './web-bridge'
-export { bindPenWebview, runPenGuestScript } from './webview'
+export { bindPenWebGuest, isPenWebUrl, repaintPenWebTheme, shutdownPenWebBridge } from './web-bridge'

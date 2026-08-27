@@ -6982,10 +6982,9 @@ def _agent_cbs(sid: str) -> dict:
             timeout=30,
         ),
         # pen_canvas tool (desktop GUI): the renderer runs a pen.dev design
-        # operation against the live Canvas tab (or the user's running pen.dev
-        # app) and answers pen.tool.respond with the JSON result. Generous
-        # timeout — execute snippets render real design documents, and a
-        # screenshot rasterizes one.
+        # operation against the live Canvas tab and answers pen.tool.respond
+        # with the JSON result. Generous timeout — execute snippets render
+        # real design documents, and a screenshot rasterizes one.
         "pen_canvas_callback": lambda action, args: _block(
             "pen.tool.request",
             sid,

@@ -141,10 +141,8 @@ declare global {
         onShown: (callback: () => void) => () => void
       }
       getBootProgress: () => Promise<DesktopBootProgress>
-      // Pen canvas (pen.dev): main hosts the user's installed pen.dev editor
-      // in a chromeless window attached to the app. The renderer gets
-      // status, the open/close doors, the agent tool proxy, and a host-event
-      // feed (save-as re-homes, add-to-chat, …).
+      // Pen canvas: main embeds app.pen.dev in a layout pane. The renderer
+      // gets status, open/close, the agent tool proxy, and a host-event feed.
       pen?: {
         status: () => Promise<PenStatus>
         open: (options?: { name?: string; path?: string; projectId?: string; sessionId?: string; template?: string }) => Promise<PenOpenResult>
@@ -176,10 +174,6 @@ declare global {
         libraryDelete: (target: string) => Promise<boolean>
         libraryRename: (target: string, nextName: string) => Promise<null | string>
         reveal: (target: string) => Promise<void>
-        /** Pen's own agent inside the canvas (chat panel, composer, launcher).
-         *  Hidden by default — hermes is the agent for this canvas. */
-        setAgentVisible: (visible: boolean) => Promise<{ hidden: boolean }>
-        agentHidden: () => Promise<boolean>
         onEvent: (callback: (payload: { event: string; payload: unknown }) => void) => () => void
       }
       getConnectionConfig: (profile?: null | string) => Promise<DesktopConnectionConfig>
@@ -1079,7 +1073,7 @@ export interface DesktopBootProgress {
   timestamp: number
 }
 
-// Pen canvas (pen.dev) types — the renderer's view of electron/pen-canvas.ts.
+// Pen canvas types — renderer view of electron/pen/.
 
 export interface PenDocumentInfo {
   docId: string
@@ -1094,14 +1088,13 @@ export interface PenStatus {
   version: string
   running: boolean
   openDocuments: PenDocumentInfo[]
-  /** pen.dev's app icon (data URL), read from the user's installed Pen.app.
-   *  Null until primed / when pen isn't installed — fall back to a glyph. */
+  /** Always null; the renderer falls back to a house glyph. */
   icon: null | string
 }
 
 export interface PenOpenResult {
   doc: PenDocumentInfo
-  /** hermes-pen:// URL the pen tile mounts in its <webview>. */
+  /** Hosted editor URL the pen tile mounts in its <webview>. */
   url: string
 }
 
