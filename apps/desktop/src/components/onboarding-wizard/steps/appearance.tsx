@@ -6,7 +6,7 @@ import { $wizardAnswers, setWizardAnswers } from '@/store/onboarding-wizard'
 import { useTheme } from '@/themes'
 import { setAccentOverride } from '@/themes/accent-override'
 
-import { AccentSwatch, accentsFor, LAYOUTS, LayoutPreviewCard, NOUS_ACCENT } from '../options'
+import { accentsFor, AccentSwatch, LayoutPreviewCard, LAYOUTS, NOUS_ACCENT } from '../options'
 
 export function AppearanceStep() {
   const answers = useStore($wizardAnswers)

@@ -1,12 +1,24 @@
+import { cleanup, render, screen } from '@testing-library/react'
 // @vitest-environment jsdom
 import { useEffect } from 'react'
-import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { registry } from '@/contrib/registry'
 import { TRANSCRIPT_DIRECTIVE_AREA, type TranscriptDirectiveContribution } from '@/lib/transcript-directives'
 
 import { paragraphPlainText, TranscriptDirectiveLeaf, useResolvedParagraph } from './transcript-directive'
+
+// Both at module scope: the compiler hoists a component out of the test body,
+// which would strand a closure over a `let` declared in there.
+const mounts = { count: 0 }
+
+const MountCounter: TranscriptDirectiveContribution['render'] = ({ streaming }) => {
+  useEffect(() => {
+    mounts.count += 1
+  }, [])
+
+  return <div data-testid="demo-card">{streaming ? 'live' : 'settled'}</div>
+}
 
 describe('paragraphPlainText', () => {
   it('passes through a plain string', () => {
@@ -121,26 +133,19 @@ describe('TranscriptDirectiveLeaf', () => {
   })
 
   it('does not remount the widget when streaming settles', () => {
-    let mounts = 0
-    const dispose = contribution({
-      render: ({ streaming }) => {
-        useEffect(() => {
-          mounts += 1
-        }, [])
+    mounts.count = 0
 
-        return <div data-testid="demo-card">{streaming ? 'live' : 'settled'}</div>
-      }
-    })
+    const dispose = contribution({ render: MountCounter })
 
     try {
       const { rerender } = render(<TranscriptDirectiveLeaf streaming text="::demo" />)
 
-      expect(mounts).toBe(1)
+      expect(mounts.count).toBe(1)
       expect(screen.getByTestId('demo-card').textContent).toBe('live')
 
       rerender(<TranscriptDirectiveLeaf streaming={false} text="::demo" />)
 
-      expect(mounts).toBe(1)
+      expect(mounts.count).toBe(1)
       expect(screen.getByTestId('demo-card').textContent).toBe('settled')
     } finally {
       dispose()

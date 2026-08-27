@@ -479,9 +479,8 @@ export async function ensureGatewayProfile(profile: string | null | undefined): 
 
   // The registry's actually-active route (published by applyActive in the
   // same synchronous step that selects the socket). Null only when the
-  // registry surface is unavailable (unit-test mocks of @/store/gateway) —
-  // then callers fall back to trusting the renderer atom, the pre-guard
-  // behavior.
+  // registry surface is unavailable — then callers fall back to trusting the
+  // renderer atom, the pre-guard behavior.
   const registryRouteKey = (): null | string =>
     typeof activeGatewayProfileKey === 'function' ? normalizeProfileKey(activeGatewayProfileKey()) : null
 

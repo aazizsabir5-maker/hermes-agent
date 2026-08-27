@@ -21,7 +21,7 @@
  */
 
 import { useStore } from '@nanostores/react'
-import { lazy, Suspense, useCallback, useEffect, useRef } from 'react'
+import { lazy, Suspense, useCallback, useEffect } from 'react'
 
 import { startChatOnboardingSolo } from '@/components/onboarding-chat/assembly'
 import type { LayoutNode } from '@/components/pane-shell/tree/model'
@@ -62,6 +62,9 @@ let devStageLaunched = false
 // One guide kickoff per process: the no-window guide run settles the store and
 // the gate's effect hands off exactly once.
 let guideKickoffHandled = false
+// One open request per active run — the effect re-fires on unrelated renders,
+// and the bridge would stack windows. Reset when the run leaves 'active'.
+let wizardWindowRequested = false
 
 export interface OnboardingWizardGateProps {
   enabled: boolean
@@ -75,8 +78,6 @@ export function OnboardingWizardGate({ enabled, onKickoff }: OnboardingWizardGat
   const wizard = useStore($onboardingWizard)
   const intro = useStore($introReveal)
   const { setTheme } = useTheme()
-  // One open request per active run — effects re-fire on unrelated renders.
-  const openRequested = useRef(false)
 
   // dev:chat strips to solo IMMEDIATELY on mount — before the gateway opens —
   // so the persisted layout's sidebar never flashes in the small window while
@@ -290,15 +291,15 @@ export function OnboardingWizardGate({ enabled, onKickoff }: OnboardingWizardGat
 
   useEffect(() => {
     if (wizard.phase !== 'active') {
-      openRequested.current = false
+      wizardWindowRequested = false
 
       return
     }
 
     const bridge = wizardBridge()
 
-    if (bridge && !openRequested.current) {
-      openRequested.current = true
+    if (bridge && !wizardWindowRequested) {
+      wizardWindowRequested = true
 
       // Login mode no longer opens a window at all: guest inference exists
       // from first boot, so the portal sign-in card is gone from the chain —
@@ -319,7 +320,7 @@ export function OnboardingWizardGate({ enabled, onKickoff }: OnboardingWizardGat
 
   // Dev entry points — `npm run dev:movie` / `dev:onboarding` / `dev:kickoff` /
   // `dev:chat` / `dev:full` bake a stage and land straight in it on boot:
-  //   movie    the cinematic alone (replay: hands the screen back after)
+  //   movie    the cinematic alone (standalone: hands the screen back after)
   //   wizard   the onboarding steps, with the finale PAUSED for iteration
   //   kickoff  straight to the app, Hermes prompting first
   //   chat     straight to the app, the WHOLE setup guided in-chat
@@ -374,8 +375,8 @@ export function OnboardingWizardGate({ enabled, onKickoff }: OnboardingWizardGat
       finale: () => devStartOnboardingWizard('finale'),
       kickoff: () => onKickoff(),
       // Replay the real first-run chain on a configured machine: reset the
-      // seen/done keys, then start the cinematic as a NON-replay so
-      // finishIntroReveal() hands off to the wizard (replay deliberately
+      // seen/done keys, then start the cinematic as NON-standalone so
+      // finishIntroReveal() hands off to the wizard (standalone deliberately
       // skips that handoff). Requires VITE_INTRO_REVEAL=1 in the Vite env.
       movie: () => {
         devResetOnboardingFlow()

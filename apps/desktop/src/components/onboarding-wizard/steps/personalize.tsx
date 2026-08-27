@@ -33,7 +33,6 @@ export function PersonalizeStep() {
                 key={option}
                 label={option}
                 on={answers.focus.includes(option)}
-                variant="pill"
                 onToggle={() =>
                   setWizardAnswers({
                     focus: answers.focus.includes(option)
@@ -41,6 +40,7 @@ export function PersonalizeStep() {
                       : [...answers.focus, option]
                   })
                 }
+                variant="pill"
               />
             ))}
           </div>

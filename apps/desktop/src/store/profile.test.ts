@@ -11,9 +11,11 @@ import type { ProfileInfo } from '@/types/hermes'
 // verifies the REGISTRY's route, not just the renderer atom, so the mocked
 // activation moves it exactly like applyActive does.
 const $activeRoute = atom<string>('default')
+
 const ensureGatewayForProfile = vi.fn(async (profile: string) => {
   $activeRoute.set(profile)
 })
+
 const ensureGatewayForAgent = vi.fn(async () => undefined)
 const openGatewayForProfile = vi.fn(async (_profile: string) => undefined)
 const $gateway = atom<unknown>({ id: 'live-socket' })

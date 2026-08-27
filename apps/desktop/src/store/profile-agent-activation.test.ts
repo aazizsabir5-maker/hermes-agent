@@ -21,6 +21,7 @@ const ensureGatewayForProfile = vi.fn(async (_profile: string) => undefined)
 const openGatewayForProfile = vi.fn(async (_profile: string) => undefined)
 const $gateway = atom<unknown>({ id: 'live-socket' })
 const resetStarmapGraph = vi.fn()
+
 // The registry's published route — the ensure fast path and publication
 // verify it now. The real applyActive moves it in the same step that selects
 // the socket; here it derives from the LAST activation call (mockClear in

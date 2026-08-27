@@ -990,7 +990,6 @@ export function ChatBar({
       busyAction={busyAction}
       canSubmit={canSubmit}
       compactModelPill={poppedOut || compactPill}
-      hideModelPill={guidedChat}
       conversation={{
         active: voiceConversationActive,
         level: conversation.level,
@@ -1004,6 +1003,7 @@ export function ChatBar({
       disabled={disabled}
       foldVoice={foldVoice}
       hasComposerPayload={hasComposerPayload}
+      hideModelPill={guidedChat}
       minimal={minimal}
       onDictate={dictate}
       onQueue={queueDraft}

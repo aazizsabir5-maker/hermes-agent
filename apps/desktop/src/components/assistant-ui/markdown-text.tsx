@@ -20,7 +20,6 @@ import { normalizeExternalUrl, openExternalLink, PrettyLink } from '@/lib/extern
 import { createMemoizedMathPlugin } from '@/lib/katex-memo'
 import { parseMarkdownIntoBlocksCached } from '@/lib/markdown-blocks'
 import { preprocessMarkdown } from '@/lib/markdown-preprocess'
-import { isDirectiveInProgress } from '@/lib/transcript-directives'
 import {
   downloadGatewayMediaFile,
   isFileMediaPath,
@@ -36,6 +35,7 @@ import {
 } from '@/lib/media'
 import { previewTargetFromMarkdownHref } from '@/lib/preview-targets'
 import { sessionRefFromMarkdownHref } from '@/lib/session-refs'
+import { isDirectiveInProgress } from '@/lib/transcript-directives'
 import { cn } from '@/lib/utils'
 
 import { ArtifactCard } from './artifact-card'

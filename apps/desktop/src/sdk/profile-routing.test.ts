@@ -67,6 +67,7 @@ vi.mock('@/store/profile', async () => {
     $gatewaySwapTarget: atom(null),
     $hydrationSyncProfile: atom(null),
     $profiles: profiles,
+    $showAllProfiles: atom(false),
     ensureGatewayAgent: vi.fn(),
     ensureGatewayProfile: vi.fn(),
     newSessionInAgent: vi.fn(),
