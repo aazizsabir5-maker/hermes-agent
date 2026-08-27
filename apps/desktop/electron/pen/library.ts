@@ -11,30 +11,19 @@ import { documents, type PenDocumentInfo } from './state'
 
 export interface PenStatus {
   available: boolean
-  loggedIn: boolean
-  version: string
   running: boolean
   openDocuments: PenDocumentInfo[]
-  /** Always null — no Pen.app icon to borrow. Renderer falls back to a glyph. */
-  icon: null | string
 }
 
 export function penStatus(): PenStatus {
   return {
     available: true,
-    loggedIn: true,
-    version: '',
     running: documents.size > 0,
-    icon: null,
     openDocuments: [...documents.values()].map(describeDocument)
   }
 }
 
-export async function openPenCanvas(options: {
-  name?: string
-  path?: string
-  template?: string
-}): Promise<PenDocumentInfo> {
+export async function openPenCanvas(options: { name?: string; path?: string }): Promise<PenDocumentInfo> {
   if (options.path) {
     return openDocument(options.path)
   }

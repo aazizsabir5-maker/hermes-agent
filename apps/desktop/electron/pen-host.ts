@@ -1,18 +1,19 @@
 // Canvas library on disk + the hosted editor URL.
 //
 // Hermes owns `.pen` files under `$HERMES_HOME/pens`. The editor is
-// app.pen.dev's embed (`/new?embed`); storage and tools go over the
-// MessagePort in pen/web-bridge.ts. No Pen.app, no vendored bundle.
+// app.pen.dev/new?embed; storage and tools go over pen/web-bridge.ts.
 
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
+import { ensurePenEmbedUrl } from './pen/embed-url'
+
 const PEN_WEB_EDITOR_DEFAULT_URL = 'https://app.pen.dev/new?embed'
 
 /** Hosted editor URL. `HERMES_PEN_WEB_URL` overrides for staging. */
 export function penWebEditorUrl(): string {
-  return process.env.HERMES_PEN_WEB_URL || PEN_WEB_EDITOR_DEFAULT_URL
+  return ensurePenEmbedUrl(process.env.HERMES_PEN_WEB_URL || PEN_WEB_EDITOR_DEFAULT_URL)
 }
 
 export function penLibraryRoot(): string {

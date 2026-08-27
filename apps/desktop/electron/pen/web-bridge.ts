@@ -17,8 +17,11 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { isPenWebUrl, penEmbedDropped, restorePenEmbedUrl } from './embed-url'
 import type { PenDocument } from './state'
 import { documents, events, log } from './state'
+
+export { isPenWebUrl } from './embed-url'
 
 const CONNECT_RETRY_MS = 500
 const REQUEST_TIMEOUT_MS = 120_000
@@ -43,15 +46,6 @@ interface WebBridge {
 let bridge: WebBridge | null = null
 
 events.on('close-document', () => shutdownPenWebBridge())
-
-/** Does this URL point at the hosted web editor? (origin match). */
-export function isPenWebUrl(url: string, webEditorUrl: string): boolean {
-  try {
-    return new URL(url).origin === new URL(webEditorUrl).origin
-  } catch {
-    return false
-  }
-}
 
 function activeDoc(): PenDocument | null {
   return [...documents.values()][0] ?? null
@@ -146,6 +140,55 @@ async function handleStorageRequest(doc: PenDocument, method: string, payload: a
     default:
       throw new Error(`unsupported storage request: ${method}`)
   }
+}
+
+/** Bind once the guest origin matches; bounce if Pencil strips `?embed`. */
+export function attachPenWebGuest(
+  guestContents: any,
+  theme: 'dark' | 'light',
+  editorUrl: string
+): void {
+  if (guestContents.__hermesPenWatch) {
+    return
+  }
+
+  guestContents.__hermesPenWatch = true
+
+  let lastBoundUrl = ''
+
+  const onNav = () => {
+    if (guestContents.isDestroyed?.()) {
+      return
+    }
+
+    const url = guestContents.getURL?.() || ''
+
+    if (penEmbedDropped(url, editorUrl)) {
+      const restored = restorePenEmbedUrl(url, editorUrl)
+
+      if (restored !== url) {
+        try {
+          guestContents.loadURL(restored)
+        } catch {
+          log.warn(`could not restore pen embed URL from ${url}`)
+        }
+      }
+
+      return
+    }
+
+    if (!isPenWebUrl(url, editorUrl) || url === lastBoundUrl) {
+      return
+    }
+
+    lastBoundUrl = url
+    bindPenWebGuest(guestContents, theme)
+  }
+
+  guestContents.on?.('did-navigate', onNav)
+  guestContents.on?.('did-navigate-in-page', onNav)
+  guestContents.on?.('did-finish-load', onNav)
+  onNav()
 }
 
 /** Wire a freshly-attached web-editor guest: retry `pen:connect` until ready. */
@@ -282,11 +325,17 @@ interface McpToolResult {
   isError?: boolean
 }
 
+export interface PenToolResult {
+  success: boolean
+  result?: unknown
+  error?: string
+}
+
 /** Run one canvas tool through `mcp-tool-call`. */
-export async function runWebPenTool(
+export async function runPenTool(
   name: string,
   args: Record<string, unknown>
-): Promise<{ success: boolean; result?: unknown; error?: string }> {
+): Promise<PenToolResult> {
   try {
     const result = (await bridgeRequest('mcp-tool-call', { name, arguments: args })) as McpToolResult
     const content = result?.content ?? []

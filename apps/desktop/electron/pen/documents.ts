@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { penLibraryPathFor } from '../pen-host'
 
@@ -69,8 +69,19 @@ export function describeDocument(doc: PenDocument): PenDocumentInfo {
   return {
     docId: doc.docId,
     fileURI: doc.fileURI,
-    displayName: doc.displayName || path.basename(doc.fileURI).replace(/\.pen$/i, '') || 'Canvas',
-    isTemporary: false
+    displayName: doc.displayName || path.basename(doc.fileURI).replace(/\.pen$/i, '') || 'Canvas'
+  }
+}
+
+export function penDocumentFilePath(doc: { fileURI?: string } | null | undefined): null | string {
+  if (!doc?.fileURI) {
+    return null
+  }
+
+  try {
+    return fileURLToPath(doc.fileURI)
+  } catch {
+    return null
   }
 }
 

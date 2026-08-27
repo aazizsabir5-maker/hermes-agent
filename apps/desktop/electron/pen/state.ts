@@ -14,7 +14,6 @@ export interface PenDocumentInfo {
   docId: string
   fileURI: string
   displayName: string
-  isTemporary: boolean
 }
 
 export interface PenDocument {
