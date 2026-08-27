@@ -1,33 +1,26 @@
+/**
+ * Renderer entry — a dispatcher and nothing else.
+ *
+ * Every `?win=` kind gets its own dynamic import, so an overlay window loads
+ * only its own subtree. Anything static here is paid for by ALL of them,
+ * including the transparent 60fps ones; main-window work belongs in
+ * `main-window.tsx`.
+ */
+
 import './styles.css'
-// Side-effect: reports in-flight turns to the main process for the quit guard.
-import './store/active-work'
-// Side-effect: mirrors the machine's AC/battery state for poll demotion.
-import './store/power'
 // Side-effect: applies the persisted window translucency on load.
 import './store/translucency'
-// Dev-only render/state churn counters. MUST precede the `react-dom` import
-// below: react-dom captures the devtools hook at module init, so bippy has to
-// install during THIS import's evaluation or every commit goes unseen
-// (verified — a late install reports renderers=0, commits=0). `vite.config.ts`
-// aliases this specifier to a no-op module for non-dev builds, so neither the
-// counters nor bippy reach a shipped renderer.
+// Dev-only render/state churn counters. MUST precede any `react-dom` import:
+// react-dom captures the devtools hook at module init, so bippy has to install
+// during THIS import's evaluation or every commit goes unseen (verified — a
+// late install reports renderers=0, commits=0). Static, and ahead of every
+// dynamic window import below, so the ordering holds for whichever one runs.
+// `vite.config.ts` aliases this specifier to a no-op module for non-dev builds,
+// so neither the counters nor bippy reach a shipped renderer.
 import '@/debug/dev-only'
 
-import { QueryClientProvider } from '@tanstack/react-query'
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import { HashRouter } from 'react-router'
-
-import App from './app'
-import { RootErrorBoundary } from './components/error-boundary'
-import { HapticsProvider } from './components/haptics-provider'
-import { RootTooltipProvider } from './components/ui/tooltip'
-import { I18nProvider } from './i18n'
 import { installClipboardShim } from './lib/clipboard'
-import { queryClient } from './lib/query-client'
-import { installRendererAnimationPauseState } from './lib/renderer-loop-pause'
 import { installSelectionCopyColorGuard } from './lib/selection-copy-colors'
-import { ThemeProvider } from './themes/context'
 
 installClipboardShim()
 // Chromium serializes selection copies (Cmd+C, right-click Copy) with the
@@ -43,59 +36,20 @@ if (import.meta.env.MODE !== 'production' || import.meta.env.VITE_PERF_PROBE ===
   import('./app/chat/perf-probe')
 }
 
-const winParam = new URLSearchParams(window.location.search).get('win')
+const WINDOW_ROOTS: Record<string, () => Promise<{ mount: () => void }>> = {
+  hud: async () => {
+    document.title = 'Hermes HUD'
 
-if (winParam === 'hud') {
-  document.title = 'Hermes HUD'
+    return import('./main-window').then(m => ({ mount: m.mountMainWindow }))
+  },
+  intro: () => import('./components/intro-reveal/intro-root').then(m => ({ mount: m.mountIntroReveal })),
+  onboarding: () => import('./components/onboarding-wizard/wizard-root').then(m => ({ mount: m.mountOnboardingWizard })),
+  overlay: () => import('./app/pet-overlay/overlay-root').then(m => ({ mount: m.mountPetOverlay })),
+  quick: () => import('./app/quick-entry/quick-entry-root').then(m => ({ mount: m.mountQuickEntry })),
+  wake: () => import('./app/wake-indicator/wake-indicator-root').then(m => ({ mount: m.mountWakeIndicator }))
 }
 
-if (winParam === 'overlay') {
-  void import('./app/pet-overlay/overlay-root').then(({ mountPetOverlay }) => mountPetOverlay())
-} else if (winParam === 'intro') {
-  void import('./components/intro-reveal/intro-root').then(({ mountIntroReveal }) => mountIntroReveal())
-} else if (winParam === 'onboarding') {
-  void import('./components/onboarding-wizard/wizard-root').then(({ mountOnboardingWizard }) => mountOnboardingWizard())
-} else if (winParam === 'quick') {
-  void import('./app/quick-entry/quick-entry-root').then(({ mountQuickEntry }) => mountQuickEntry())
-} else if (winParam === 'wake') {
-  void import('./app/wake-indicator/wake-indicator-root').then(({ mountWakeIndicator }) => mountWakeIndicator())
-} else {
-  // CSS animations do not inherit Chromium's JS-loop pause policy. Mirror the
-  // main window's focus/visibility state to :root so decorative infinite
-  // animations stop producing frames when nobody can see them.
-  installRendererAnimationPauseState()
+const win = new URLSearchParams(window.location.search).get('win')
+const root = (win && WINDOW_ROOTS[win]) || (() => import('./main-window').then(m => ({ mount: m.mountMainWindow })))
 
-  createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-      <RootErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <I18nProvider>
-            <ThemeProvider>
-              <HapticsProvider>
-                {/* ONE tooltip provider for the whole app. Every `Tip` used to
-                    carry its own, and with ~107 call sites those subtrees
-                    dominated unrelated interactions (52,784 TooltipProvider
-                    renders in a single sash drag). Radix's provider holds only
-                    refs and stable callbacks, so hoisting is what it's for. */}
-                <RootTooltipProvider>
-                  {/* useTransitions={false}: react-router v7's HashRouter wraps every
-                    route state update in React.startTransition() by default. In
-                    React 19's concurrent renderer, transitions are non-urgent — React
-                    can yield mid-render and resume later. When the app is under load
-                    (streaming token deltas, gateway events, store updates), those
-                    higher-priority updates keep interrupting the transition, starving
-                    the route change commit. The session sidebar highlight + main pane
-                    both freeze for seconds despite the main thread being free.
-                    Disabling transitions makes navigate() commit at default priority. */}
-                  <HashRouter useTransitions={false}>
-                    <App />
-                  </HashRouter>
-                </RootTooltipProvider>
-              </HapticsProvider>
-            </ThemeProvider>
-          </I18nProvider>
-        </QueryClientProvider>
-      </RootErrorBoundary>
-    </StrictMode>
-  )
-}
+void root().then(({ mount }) => mount())
