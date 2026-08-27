@@ -39,8 +39,8 @@ export function Chip({
       className={cn(
         'flex items-center text-left',
         variant === 'pill'
-          ? 'gap-1.5 rounded-full px-3 py-1.5 text-[12px]'
-          : 'gap-2.5 rounded-[6px] px-3 py-2.5 text-[13px]',
+          ? 'max-w-full shrink-0 gap-1.5 rounded-full px-3 py-1.5 text-[12px] whitespace-normal wrap-anywhere'
+          : 'min-w-0 gap-2.5 rounded-[6px] px-3 py-2.5 text-[13px]',
         selectableClass(on),
         className
       )}
@@ -49,7 +49,7 @@ export function Chip({
     >
       {icon}
       <span className="min-w-0">
-        <span className="block truncate">{label}</span>
+        <span className={variant === 'pill' ? 'block wrap-anywhere' : 'block truncate'}>{label}</span>
         {sub && <span className="block text-xs text-muted-foreground">{sub}</span>}
       </span>
     </button>

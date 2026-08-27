@@ -55,19 +55,22 @@ export function AskDirective({ attrs, streaming }: { attrs: Record<string, strin
   }
 
   return (
-    <div className="my-3 flex flex-col gap-2 duration-300 animate-in fade-in-0 slide-in-from-bottom-2" data-onboarding-card>
+    <div
+      className="my-3 flex min-w-0 max-w-full flex-col gap-2 overflow-visible duration-300 animate-in fade-in-0 slide-in-from-bottom-2"
+      data-onboarding-card
+    >
       <div className="text-[13px] font-medium">{question}</div>
       {options.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex min-w-0 max-w-full flex-wrap gap-2">
           {options.map(option => (
             <button
               className={cn(
-                'rounded-full border px-3 py-1.5 text-[12px] transition-all duration-150 active:scale-95',
+                'max-w-full shrink-0 rounded-full border px-3 py-1.5 text-left text-[12px] whitespace-normal wrap-anywhere transition-colors',
                 picked === option
-                  ? 'scale-105 border-primary bg-primary text-primary-foreground'
+                  ? 'border-primary bg-primary text-primary-foreground'
                   : picked !== null
                     ? 'border-border/60 text-muted-foreground/50'
-                    : 'border-border bg-card hover:-translate-y-px hover:border-primary/50 hover:bg-primary/10'
+                    : 'border-border bg-card hover:border-primary/50 hover:bg-primary/10'
               )}
               disabled={picked !== null || streaming}
               key={option}
@@ -81,7 +84,7 @@ export function AskDirective({ attrs, streaming }: { attrs: Record<string, strin
       )}
       {wantsInput && picked === null && (
         <form
-          className="flex gap-2"
+          className="flex min-w-0 max-w-full gap-2"
           onSubmit={event => {
             event.preventDefault()
             submit(text)
@@ -94,7 +97,7 @@ export function AskDirective({ attrs, streaming }: { attrs: Record<string, strin
             value={text}
           />
           <button
-            className="rounded-full bg-primary px-3.5 py-1.5 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-85 disabled:opacity-40"
+            className="shrink-0 rounded-full bg-primary px-3.5 py-1.5 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-85 disabled:opacity-40"
             disabled={!text.trim() || streaming}
             type="submit"
           >

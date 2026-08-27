@@ -178,7 +178,7 @@ function FocusCard({ locked = false }: CardProps) {
         }
       }}
     >
-      <div className="flex flex-wrap gap-2">
+      <div className="flex min-w-0 max-w-full flex-wrap gap-2">
         {FOCUS_OPTIONS.map(option => (
           <Chip
             key={option}
@@ -394,8 +394,8 @@ function FirstBuildCard({ attrs, locked = false }: CardProps & { attrs: Record<s
   // nothing. Degrade to the one option we can always offer.
   if (options.length < 2) {
     return (
-      <div className="my-3 grid max-w-md gap-4" data-onboarding-card inert={locked || undefined}>
-        <div className="flex flex-wrap gap-2">
+      <div className="my-3 grid min-w-0 max-w-md gap-4" data-onboarding-card inert={locked || undefined}>
+        <div className="flex min-w-0 max-w-full flex-wrap gap-2">
           <Chip
             label="Let's figure it out together"
             on={picked !== null}
@@ -408,8 +408,8 @@ function FirstBuildCard({ attrs, locked = false }: CardProps & { attrs: Record<s
   }
 
   return (
-    <div className="my-3 grid max-w-md gap-4" data-onboarding-card inert={locked || undefined}>
-      <div className="flex flex-wrap gap-2">
+    <div className="my-3 grid min-w-0 max-w-md gap-4" data-onboarding-card inert={locked || undefined}>
+      <div className="flex min-w-0 max-w-full flex-wrap gap-2">
         {options.map(option => (
           <Chip
             key={option}
@@ -464,9 +464,9 @@ function HandoffCard({ attrs, locked = false }: CardProps & { attrs: Record<stri
     const plan = parseHandoffPlan(attrs.plan)
 
     return (
-      <div className="my-3 grid max-w-md gap-2" data-onboarding-card>
+      <div className="my-3 grid min-w-0 max-w-md gap-2" data-onboarding-card>
         <span className="text-sm text-(--ui-text-secondary)">How should we run it?</span>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex min-w-0 max-w-full flex-wrap gap-2">
           {order.map(surface => (
             <Chip
               key={surface}
