@@ -173,6 +173,29 @@ const PRETEND = {
   spark: { ageDays: 0, arch: 'arm64', model: '', nvidia: true, platform: 'win32', release: '10.0.26100' }
 }
 
+/**
+ * process.env minus the vars an outer Hermes runtime exports into its
+ * children. Devs launch this from terminals owned by a RUNNING Hermes agent
+ * (TUI/desktop sessions), and that runtime advertises ITSELF:
+ * HERMES_PYTHON/HERMES_PYTHON_SRC_ROOT point at the installed agent, and the
+ * backend's hermes_bootstrap.harden_import_path() inserts that SRC_ROOT ahead
+ * of this repo on sys.path — the lazy `from run_agent import AIAgent` at first
+ * turn then constructs the INSTALLED (older) AIAgent against this repo's
+ * gateway kwargs and the flow dies with an unexpected-keyword TypeError worn
+ * as a chat reply. NODE_ENV=production from the same inherited env separately
+ * strips vite's dev transforms (blank renderer) and npm's devDependencies.
+ * The sandbox always runs THIS repo; drop the inherited overrides.
+ */
+function sanitizedEnv() {
+  const env = { ...process.env }
+
+  for (const key of ['HERMES_PYTHON', 'HERMES_PYTHON_SRC_ROOT', 'NODE_ENV']) {
+    delete env[key]
+  }
+
+  return env
+}
+
 async function main() {
   const keep = process.argv.includes('--keep')
   const mock = process.argv.includes('--mock')
@@ -200,7 +223,7 @@ async function main() {
   const child = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'dev:chat'], {
     cwd: DESKTOP_ROOT,
     env: {
-      ...process.env,
+      ...sanitizedEnv(),
       ...(mock ? mockEnv(hermesHome) : {}),
       ...(pretend ? { HERMES_DESKTOP_FAKE_MACHINE: JSON.stringify(PRETEND[pretend]) } : {}),
       HERMES_DESKTOP_USER_DATA_DIR: userDataDir,

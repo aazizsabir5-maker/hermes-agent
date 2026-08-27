@@ -126,6 +126,29 @@ store (`_provider_state_transaction`).
   overrides HOME so the profiles root is sandboxed too; pass
   `HERMES_DESKTOP_PYTHON=$HERMES_MAIN_CHECKOUT/.venv/bin/python` when
   running it bare).
+- **`NODE_ENV=production` in the environment poisons everything twice**
+  (agent/TUI sessions often inherit it silently): `npm ci` drops all
+  devDependencies without a word — electron/vite/cross-env missing, scripts
+  die on `cross-env: command not found`; and if the app does launch, vite's
+  React Refresh preamble never initializes → `$RefreshSig$ is not defined`
+  → `#root` stays empty behind the boot screen (window opens, flow never
+  appears). Fix: `env -u NODE_ENV npm ci --include=dev` and
+  `env -u NODE_ENV npm run dev:*`. Check with `echo $NODE_ENV` before
+  blaming the branch. (dev-fresh.mjs now sheds NODE_ENV itself; bare
+  `npm run dev` does not.)
+- **Outer Hermes runtime hijacks the sandbox backend**: a terminal owned by
+  a RUNNING Hermes agent exports `HERMES_PYTHON`/`HERMES_PYTHON_SRC_ROOT`
+  pointing at the INSTALLED agent; the backend's import-path hardening puts
+  that SRC_ROOT ahead of the worktree, and the first model turn constructs
+  the installed (older) AIAgent against the branch's gateway kwargs —
+  surfacing as a TypeError worn as a chat reply (e.g. `unexpected keyword
+  argument 'drive_preview_callback'`), with no traceback in any log.
+  dev-fresh.mjs sheds these too; for bare runs, `env -u HERMES_PYTHON -u
+  HERMES_PYTHON_SRC_ROOT`.
+- **Blank-window triage in one command**: with the app up,
+  `node apps/desktop/scripts/probe-renderer.mjs` (CDP on 127.0.0.1:9222)
+  dumps `rootChildren`/`bodyText` — `rootChildren: 0` plus a `$RefreshSig$`
+  exception in the dev log is the NODE_ENV poison above, not a flow bug.
 - **Windows**: template is zsh-only. A PowerShell port exists on some team
   machines but is not shipped here.
 
