@@ -1,6 +1,7 @@
 import type { BillingBlock } from '@hermes/shared'
 
 import { burstVibeHearts } from '@/components/chat/vibe-hearts'
+import { reportFirstBuildTurnComplete } from '@/components/onboarding-chat/first-build'
 import { translateNow } from '@/i18n'
 import { coerceGatewayText, coerceThinkingText } from '@/lib/chat-runtime'
 import { playCompletionSound } from '@/lib/completion-sound'
@@ -12,10 +13,10 @@ import { setSessionCompacting } from '@/store/compaction'
 import { notify } from '@/store/notifications'
 import { flashPetActivity, markPetUnread, setPetActivity } from '@/store/pet'
 import { clearAllPrompts } from '@/store/prompts'
-import { reportGuestTurnComplete } from '@/store/suggestion-providers/guest-claim'
 import { providerWaitText, setSessionProviderWait } from '@/store/provider-wait'
 import { setCurrentUsage, setTurnStartedAt } from '@/store/session'
 import { pruneFinishedSessionSubagents } from '@/store/subagents'
+import { reportGuestTurnComplete } from '@/store/suggestion-providers/guest-claim'
 import { clearActiveSessionTodos } from '@/store/todos'
 
 import type { GatewayEventContext } from './types'
@@ -353,6 +354,10 @@ export function handleMessageStreamEvent(ctx: GatewayEventContext): boolean {
         : undefined
 
     completeAssistantMessage(sessionId, finalText, payload?.response_previewed, failure, occurredAt)
+
+    // Onboarding's first build: between turns is the only moment Setup may
+    // put a check-in into that session (no-op everywhere else).
+    reportFirstBuildTurnComplete(sessionId, finalText)
 
     // Structured billing wall forwarded by the gateway (out of credits /
     // payment required) — cache it + raise a billing-specific toast.

@@ -2469,6 +2469,14 @@ export const en: Translations = {
       done: 'Setup saved',
       doneTip: 'Your account is linked — nothing else to do'
     },
+    hermesAccount: {
+      label: 'Sign in to Hermes',
+      tip: 'Take your setup to your other machines. Skip it and everything stays on this one.',
+      working: 'Opening sign-in…',
+      workingTip: 'Click to cancel',
+      done: 'Signed in',
+      doneTip: 'This machine is linked to your account'
+    },
     snippets: {
       codeReview: {
         label: 'Code review',

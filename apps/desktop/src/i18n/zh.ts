@@ -2649,6 +2649,14 @@ export const zh: Translations = {
       done: '设置已保存',
       doneTip: '账户已关联 — 无需其他操作'
     },
+    hermesAccount: {
+      label: '登录 Hermes',
+      tip: '把这套设置带到你的其他设备。不登录也可以，一切都留在这台机器上。',
+      working: '正在打开登录…',
+      workingTip: '点击取消',
+      done: '已登录',
+      doneTip: '这台设备已关联到你的账户'
+    },
     snippets: {
       codeReview: {
         label: '代码审查',
