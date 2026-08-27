@@ -36,7 +36,7 @@ describe('the machine-setup plan', () => {
   })
 
   it('hands the agent what the app already knows, freshness first', () => {
-    $machine.set({ ageDays: 0, arch: 'arm64', model: '', nvidia: true, platform: 'win32', release: '10.0.26100' })
+    $machine.set({ ageDays: 0, arch: 'arm64', model: '', nvidia: true, platform: 'win32', release: '10.0.26100', username: '' })
 
     const runbook = buildTaskBotRunbook('Set up this Spark', ANSWERS, 'bot', 'machine-setup')
 

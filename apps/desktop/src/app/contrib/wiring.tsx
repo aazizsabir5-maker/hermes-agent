@@ -638,18 +638,23 @@ export function ContribWiring({ children }: { children: ReactNode }) {
   const kickoffFirstChat = useCallback(
     (kind: 'greet' | 'guide' = 'greet') => {
       if (kind === 'guide') {
-        // The opening line is PRE-BANKED and on screen before anything else
-        // happens — picked synchronously so the thread's first paint has it.
-        pickOnboardingGreeting()
         // Solo mode: chat-only layout, no statusbar — the app assembles
         // around the conversation when the layout card is answered.
         startChatOnboardingSolo()
       }
       void (async () => {
-        // Ask the host what it is BEFORE composing the runbook: a machine that
-        // is barely out of the box changes what the flow leads with.
+        // Ask the host what it is BEFORE composing the greeting or the
+        // runbook: a machine that is barely out of the box changes what the
+        // flow leads with, and the greeting offers the account name as a
+        // default. One local IPC — the pick below still beats everything
+        // slow (the session create, the first model turn), so the first
+        // paint stays instant.
         if (kind === 'guide') {
           await loadMachineProfile()
+          // The opening line is PRE-BANKED and on screen before anything
+          // else happens — picked here so it can know the machine (and the
+          // name suggestion) while still painting long before any turn.
+          pickOnboardingGreeting()
         }
 
         const seedMessages = kind === 'guide' ? buildChatOnboardingSeedMessages(pickOnboardingGreeting()) : undefined

@@ -33,6 +33,7 @@ import {
 import { registry } from '@/contrib/registry'
 import { redockLivePane } from '@/store/first-screen-live'
 import { setSidebarOpen } from '@/store/layout'
+import { machineUserName } from '@/store/machine'
 import { setOnboardingSurfaceActive } from '@/store/onboarding-presence'
 import { onboardingDevStage, skipOnboardingWizard } from '@/store/onboarding-wizard'
 import { $statusbarVisible } from '@/store/statusbar-prefs'
@@ -64,7 +65,11 @@ const GREETINGS = [
 
 export const $onboardingGreeting = atom('')
 
-/** Pick (and remember) the canned opening line for this run. */
+/** Pick (and remember) the canned opening line for this run. When the host
+ *  reports a suggestable account name (machineUserName), the greeting ends by
+ *  offering it as a default — \"or I can just call you akp\". The suggestion
+ *  rides the SAME word the seed rows bank, so the canonical row, the typed
+ *  reveal, and what the runbook says was said can never disagree. */
 export function pickOnboardingGreeting(): string {
   const existing = $onboardingGreeting.get()
 
@@ -73,10 +78,11 @@ export function pickOnboardingGreeting(): string {
   }
 
   const line = GREETINGS[Math.floor(Math.random() * GREETINGS.length)] ?? GREETINGS[0]
+  const suggested = machineUserName()
 
-  $onboardingGreeting.set(line)
+  $onboardingGreeting.set(suggested ? `${line}\n\n(I can also just call you ${suggested}, if you prefer.)` : line)
 
-  return line
+  return $onboardingGreeting.get()
 }
 
 /** Whether the layout card's pick happened. A STORE, not card-local state:

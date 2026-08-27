@@ -44,6 +44,33 @@ export function machineLooksNew(): boolean {
   return age != null && age <= NEW_MACHINE_DAYS
 }
 
+/** Login names that are not a name. 'akp' suggests fine; 'user' does not. */
+const NON_NAME_USERNAMES = new Set([
+  'admin',
+  'administrator',
+  'default',
+  'guest',
+  'me',
+  'owner',
+  'root',
+  'test',
+  'user'
+])
+
+/** A suggestable name for the guided chat's first question: the OS account
+ *  name, when it actually looks like something you could be called. The login
+ *  handle is a hint, never a truth — the greeting offers it as a default and
+ *  the user still picks. Null means no suggestion; the guide just asks. */
+export function machineUserName(): string | null {
+  const raw = ($machine.get()?.username ?? '').trim()
+
+  if (raw.length < 2 || raw.length > 20) {
+    return null
+  }
+
+  return NON_NAME_USERNAMES.has(raw.toLowerCase()) ? null : raw
+}
+
 /** A Spark, either kind. Neither is a machine anyone owns for its own sake —
  *  both are bought to be set up — so one takes the front of the flow whatever
  *  its account age says.

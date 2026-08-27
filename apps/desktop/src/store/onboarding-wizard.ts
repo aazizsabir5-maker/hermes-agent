@@ -19,7 +19,7 @@
 import { atom } from 'nanostores'
 
 import { readJson, readKey, writeJson, writeKey } from '@/lib/storage'
-import { machineKind, machineSetupLeads } from '@/store/machine'
+import { machineKind, machineSetupLeads, machineUserName } from '@/store/machine'
 import { VOICE_RULES } from '@/store/onboarding-first-screen'
 
 import { $instantAccount, instantSuppressesOnboarding } from './instant-account'
@@ -410,7 +410,7 @@ export function buildChatOnboardingSeedMessages(greeting = CHAT_ONBOARDING_GREET
   role: 'assistant' | 'user'
 }[] {
   return [
-    { content: buildChatOnboardingPrompt(), display_kind: 'hidden', role: 'user' },
+    { content: buildChatOnboardingPrompt(machineUserName()), display_kind: 'hidden', role: 'user' },
     { content: greeting, role: 'assistant' }
   ]
 }
@@ -478,7 +478,7 @@ export function forkFallbackOptions(): string[] {
  *  canonical Bot Chat must rehydrate with it), while the first run paints it
  *  through the banked typing reveal (assembly.ts / thread list) — either way
  *  the model must never greet again. */
-export function buildChatOnboardingPrompt(): string {
+export function buildChatOnboardingPrompt(suggestedName?: string | null): string {
   const kind = machineKind()
   const machine = machineForkOption()
   const fallback = forkFallbackOptions()
@@ -491,6 +491,11 @@ export function buildChatOnboardingPrompt(): string {
     'RULE 2 — images are welcome but never a surprise and never a delay: deliver the TEXT deliverable first, and only then, when a visual genuinely helps (a header image for an announcement, a mock for a page), you may generate ONE image — always introduced with a short line naming what you made and why ("I generated a header image for the announcement — swap or drop it"). Never let image generation stall or replace the text answer, never more than one per turn, and never for plain lists, plans, or checklists.',
     `RULE 3 — ONE question per turn, then stop. These ask the user something and END your turn the moment you write one: ${QUESTION_CARDS.join(', ')}, and every ::ask. Place exactly one, then stop: never ask the next thing in the same message, and never tell them what is coming. Their answer arrives as the next message, and that is what moves you forward. Two questions in one message is a failure: you asked something whose answer you have not heard yet, and they are looking at two half-answered cards stacked on top of each other. (::onboarding{step="name"} and ::onboarding{step="working"} are NOT questions — they render as nothing and only save what the user just told you, so they belong in the same turn as the question that follows them.)`,
     'Your first message has ALREADY been sent for you: it greeted them and asked what you should call them. Do not greet again — their next message is their answer.',
+    ...(suggestedName
+      ? [
+          `The greeting also offered their OS account name "${suggestedName}" as a default. If they accept it (a "sure", "yes", "that works", or any similar go-ahead), treat that as their answer and save exactly "${suggestedName}".`
+        ]
+      : []),
     'From there, walk them through setup conversationally, one turn each, in this order:',
     '1. Acknowledge their name warmly in a few words, then ::onboarding{step="name" value="THEIR_NAME"} on a line of its own, THEIR_NAME being the actual name they gave (it renders as nothing — it just saves the name). Then their color: one short sentence, then ::onboarding{step="look"} on a line of its own.',
     '2. Then the tools they already use, so Hermes can connect to them later: one short sentence, then ::onboarding{step="connectors"} on a line of its own.',

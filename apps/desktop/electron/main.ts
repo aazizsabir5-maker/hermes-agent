@@ -16439,6 +16439,17 @@ ipcMain.handle('hermes:machine:profile', async () => {
     // Unknown age — the option still shows, it just doesn't lead.
   }
 
+  // The OS login name powers a first-name SUGGESTION in the guided chat ("or
+  // I can just call you akp"). Best-effort: an unidentifiable user just gets
+  // no suggestion.
+  let username = ''
+
+  try {
+    username = os.userInfo().username
+  } catch {
+    // No account name to suggest — the guide simply asks.
+  }
+
   return {
     ageDays,
     arch: process.arch,
@@ -16446,6 +16457,7 @@ ipcMain.handle('hermes:machine:profile', async () => {
     nvidia: await hasNvidiaGpu(),
     platform: process.platform,
     release: os.release(),
+    username,
     ...readFakeMachine()
   }
 })

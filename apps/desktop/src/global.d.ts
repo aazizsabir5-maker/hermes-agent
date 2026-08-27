@@ -606,6 +606,10 @@ export interface DesktopMachineProfile {
   nvidia: boolean
   platform: string
   release: string
+  /** OS login name ('' when unknowable) — a first-name SUGGESTION for the
+   *  guided chat, never a default. The renderer blocklists handles that are
+   *  not a name before offering it. */
+  username: string
 }
 
 export type DesktopUninstallMode = 'full' | 'gui' | 'lite'
