@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { segmentTranscriptDirectives } from './transcript-directives'
+import { isDirectiveInProgress, segmentTranscriptDirectives } from './transcript-directives'
 
 /** The directives found in a paragraph, prose discarded. */
 const directivesIn = (text: string) =>
@@ -80,5 +80,34 @@ describe('segmentTranscriptDirectives', () => {
   // dropped is broken in a way nobody can see from the outside.
   it('leaves a directive whose attributes it could not read as text', () => {
     expect(segmentTranscriptDirectives('::preview{file="unclosed.html"')).toBeNull()
+  })
+})
+
+describe('isDirectiveInProgress', () => {
+  it('flags a partially-streamed directive paragraph (the flash window)', () => {
+    // The real symptom: ~3-char deltas leave the directive unparseable until
+    // the closing `}` lands. Every prefix along the way must be withheld.
+    const full = '::ask{question="What sounds better?" options="I have something in mind|Automate"}'
+
+    for (let end = 2; end < full.length; end += 3) {
+      expect(isDirectiveInProgress(full.slice(0, end))).toBe(true)
+    }
+  })
+
+  it('flags the lone-colon prefix one delta earlier', () => {
+    expect(isDirectiveInProgress(':')).toBe(true)
+  })
+
+  it('flags a complete directive line too (callers gate on streaming, not shape)', () => {
+    expect(isDirectiveInProgress('::onboarding{step="connectors"}')).toBe(true)
+    expect(isDirectiveInProgress('  ::tasks')).toBe(true)
+  })
+
+  it('leaves ordinary streaming prose alone', () => {
+    expect(isDirectiveInProgress('just some text')).toBe(false)
+    expect(isDirectiveInProgress('a colon: mid-sentence')).toBe(false)
+    expect(isDirectiveInProgress('std::vector<int>')).toBe(false)
+    expect(isDirectiveInProgress(':single-colon-emoji-ish')).toBe(false)
+    expect(isDirectiveInProgress('')).toBe(false)
   })
 })

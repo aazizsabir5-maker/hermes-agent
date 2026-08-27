@@ -73,6 +73,25 @@ function parseAttrs(body: string | undefined): Record<string, string> {
 }
 
 /**
+ * True when a STILL-STREAMING paragraph should be withheld as a directive in
+ * progress. Deltas land ~3 chars at a time, and `::ask{question="Wha` cannot
+ * parse until the final `}` lands — exactly the window where raw directive
+ * text used to flash. A lone `:` is the same line one delta earlier. The
+ * check covers the paragraph-leading case (the authored shape for onboarding
+ * cards); a directive a model appends mid-sentence streams as prose until it
+ * completes, which reads as ordinary typing rather than leaked markup.
+ *
+ * Only ever consult this while the message is streaming: a SETTLED paragraph
+ * that starts with `::` but doesn't parse is an authoring bug the user should
+ * see as text, and callers must keep that behavior.
+ */
+export function isDirectiveInProgress(text: string): boolean {
+  const trimmed = text.trimStart()
+
+  return trimmed === ':' || trimmed.startsWith('::')
+}
+
+/**
  * Split a paragraph into its prose runs and the directives embedded in them,
  * in the order they were written. Null when it holds no directive at all.
  *

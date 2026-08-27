@@ -20,6 +20,7 @@ import { normalizeExternalUrl, openExternalLink, PrettyLink } from '@/lib/extern
 import { createMemoizedMathPlugin } from '@/lib/katex-memo'
 import { parseMarkdownIntoBlocksCached } from '@/lib/markdown-blocks'
 import { preprocessMarkdown } from '@/lib/markdown-preprocess'
+import { isDirectiveInProgress } from '@/lib/transcript-directives'
 import {
   downloadGatewayMediaFile,
   isFileMediaPath,
@@ -529,6 +530,18 @@ function MarkdownParagraph({
         )}
       </>
     )
+  }
+
+  // Directive-in-progress: while the message is still streaming, a paragraph
+  // that begins with `::` is a directive whose closing shape hasn't fully
+  // arrived (directives always sit alone in their own paragraph — FLOW.md),
+  // so it can't be claimed yet. Rendering the plain <p> here is the raw-text
+  // flash (`::ask{question="Wha…`) that snaps into a card on settle — hold
+  // the slot empty instead. Once streaming ends this branch is dead, so a
+  // SETTLED malformed/unclaimed directive still shows as prose (an authoring
+  // bug the user should see).
+  if (streaming && plain !== null && isDirectiveInProgress(plain)) {
+    return null
   }
 
   return (
