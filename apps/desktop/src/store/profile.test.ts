@@ -6,13 +6,26 @@ import type { ProfileInfo } from '@/types/hermes'
 
 // Keep profile.ts's side-effecting imports inert: the gateway socket layer and
 // the REST query client must not run for real in a unit test.
-const ensureGatewayForProfile = vi.fn(async () => undefined)
+// $activeRoute mirrors the registry's applyActive-published route
+// ($activeGatewayRoute / activeGatewayProfileKey): the ensure fast path now
+// verifies the REGISTRY's route, not just the renderer atom, so the mocked
+// activation moves it exactly like applyActive does.
+const $activeRoute = atom<string>('default')
+const ensureGatewayForProfile = vi.fn(async (profile: string) => {
+  $activeRoute.set(profile)
+})
 const ensureGatewayForAgent = vi.fn(async () => undefined)
 const openGatewayForProfile = vi.fn(async (_profile: string) => undefined)
 const $gateway = atom<unknown>({ id: 'live-socket' })
 const resetStarmapGraph = vi.fn()
 
-vi.mock('@/store/gateway', () => ({ $gateway, ensureGatewayForAgent, ensureGatewayForProfile, openGatewayForProfile }))
+vi.mock('@/store/gateway', () => ({
+  $gateway,
+  activeGatewayProfileKey: () => $activeRoute.get(),
+  ensureGatewayForAgent,
+  ensureGatewayForProfile,
+  openGatewayForProfile
+}))
 vi.mock('@/hermes', () => ({
   getProfiles: vi.fn(async () => ({ profiles: [] })),
   setApiRequestProfile: vi.fn()
@@ -56,6 +69,7 @@ beforeEach(() => {
   ensureGatewayForProfile.mockClear()
   openGatewayForProfile.mockClear()
   $gateway.set({ id: 'live-socket' })
+  $activeRoute.set('default')
   $activeGatewayProfile.set('default')
   $connection.set(localConn())
   $profiles.set([])
@@ -107,6 +121,7 @@ describe('ensureGatewayProfile → $connection sync (#46651)', () => {
 
   it('does not churn $connection when the target is already the active profile', async () => {
     $activeGatewayProfile.set('vps-remote')
+    $activeRoute.set('vps-remote')
     $connection.set(remoteConn())
 
     await ensureGatewayProfile('vps-remote')
@@ -114,6 +129,44 @@ describe('ensureGatewayProfile → $connection sync (#46651)', () => {
     expect(getConnection).not.toHaveBeenCalled()
     expect(ensureGatewayForProfile).not.toHaveBeenCalled()
     expect($connection.get()?.mode).toBe('remote')
+  })
+
+  it('re-activates when the atom names the target but the registry route disagrees (#89206 split-brain)', async () => {
+    // The observed live failure: $activeGatewayProfile already says 'default'
+    // (an unconditional publication survived an epoch-losing applyActive) but
+    // the active SOCKET still serves hermes-setup. The old fast path trusted
+    // the atom as proof of the socket and early-returned, so the handoff's
+    // session.create rode Setup's connection. The fast path must verify the
+    // registry's route and fall through to a real re-activation.
+    $activeGatewayProfile.set('default')
+    $activeRoute.set('hermes-setup')
+    getConnection.mockResolvedValue(localConn())
+
+    await ensureGatewayProfile('default')
+
+    expect(ensureGatewayForProfile).toHaveBeenCalledWith('default')
+    // The full path leaves atom and route agreeing again.
+    expect($activeGatewayProfile.get()).toBe('default')
+    expect($activeRoute.get()).toBe('default')
+  })
+
+  it('publishes the route the registry actually landed on when the activation loses its epoch', async () => {
+    // applyActive declining (a concurrent eviction re-routed the socket while
+    // this activation awaited) must not let the caller publish the target
+    // anyway — that unconditional publication IS the split-brain producer.
+    $activeGatewayProfile.set('hermes-setup')
+    $activeRoute.set('hermes-setup')
+    ensureGatewayForProfile.mockImplementationOnce(async () => {
+      $activeRoute.set('hermes-setup') // socket stayed elsewhere — epoch lost
+    })
+    getConnection.mockResolvedValue(localConn())
+
+    await ensureGatewayProfile('default')
+
+    // Atom agrees with the socket, so the next ensure retries the swap
+    // instead of fast-pathing on a stale claim.
+    expect(ensureGatewayForProfile).toHaveBeenCalledWith('default')
+    expect($activeGatewayProfile.get()).toBe('hermes-setup')
   })
 })
 

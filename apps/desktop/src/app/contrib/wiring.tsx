@@ -198,6 +198,11 @@ const StarmapView = lazy(async () => ({ default: (await import('../starmap')).St
 // the controller that assembles them.
 export { WiredPane } from './context'
 
+// The RPCs createBackendSessionForSend issues while minting the handoff's
+// task chat (create + drift-abort close + optional YOLO arm). Only these ride
+// the handoff retarget below; everything else keeps the session-owner route.
+const HANDOFF_CREATE_LEG_METHODS = new Set(['config.set', 'session.close', 'session.create'])
+
 export function ContribWiring({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
   const location = useLocation()
@@ -322,12 +327,24 @@ export function ContribWiring({ children }: { children: ReactNode }) {
 
   const { connectionRef, gateway, gatewayRef, requestGateway: ambientRequestGateway } = useGatewayRequest()
 
+  // The guided-onboarding handoff explicitly retargets its create leg at the
+  // profile it just ensured (session → default, bot → the minted bot
+  // profile). While set, the session-owner wrapper below routes the create
+  // leg's methods over THAT profile's own socket instead of pinning them to
+  // the selected chat's owner — during the handoff the user still sits in
+  // Setup's chat, so the owner route pinned both surfaces' session.create to
+  // hermes-setup's socket no matter which gateway the branch had activated
+  // (#89206 class). Scoped to the exact methods createBackendSessionForSend
+  // issues so concurrent traffic (composer submits, background refreshes)
+  // keeps the normal owner policy even inside the short handoff window.
+  const handoffCreateProfileRef = useRef<null | string>(null)
+
   // When chrome stays on the launch backend (Bot Mode / all-profiles
   // navigation), session-owned RPCs still have to hit the session's backend.
   // The routing itself lives in createSessionRpcDispatcher (routed by the
   // session the RPC targets, owner ladder in resolveSessionRpcOwner) so the
   // exact production dispatcher is what the integration tests drive.
-  const requestGateway = useMemo(
+  const dispatchSessionRpc = useMemo(
     () =>
       createSessionRpcDispatcher({
         ambientRequest: ambientRequestGateway,
@@ -336,6 +353,25 @@ export function ContribWiring({ children }: { children: ReactNode }) {
         sessionStateByRuntimeIdRef
       }),
     [ambientRequestGateway, runtimeIdByStoredSessionIdRef, selectedStoredSessionIdRef, sessionStateByRuntimeIdRef]
+  )
+
+  const requestGateway = useCallback(
+    <T,>(method: string, params?: Record<string, unknown>, timeoutMs?: number, signal?: AbortSignal) => {
+      // Explicitly retargeted handoff creates bypass the owner ladder: the
+      // handoff effect ensured the target profile's gateway a moment ago, and
+      // the selected (Setup) chat is NOT the owner of the work being created —
+      // the owner route would pin session.create to hermes-setup's socket
+      // (#89206 class). Normal chats never set the ref, so the dispatcher's
+      // general policy is untouched.
+      const handoffProfile = handoffCreateProfileRef.current
+
+      if (handoffProfile !== null && HANDOFF_CREATE_LEG_METHODS.has(method)) {
+        return requestGatewayForProfile<T>(handoffProfile, method, params ?? {}, timeoutMs, signal)
+      }
+
+      return dispatchSessionRpc<T>(method, params, timeoutMs, signal)
+    },
+    [dispatchSessionRpc]
   )
 
   const { loadMoreMessagingForPlatform, loadMoreSessions, refreshCronJobs, refreshMessagingSessions, refreshSessions } =
@@ -854,19 +890,70 @@ export function ContribWiring({ children }: { children: ReactNode }) {
           await ensureGatewayProfile('default')
         }
 
-        const runtimeId = await createBackendSessionForSend(
-          brief,
-          buildTaskBotSeedMessages(task, answers, surface, plan),
-          // A bot's chat is its hidden canonical registry row; a session is an
-          // ordinary visible row the user finds by the task's name.
-          surface === 'bot' ? { hidden: true, title: 'Bot Chat' } : { title: botTitle }
-        )
+        // The create must ride the profile just ensured — NOT the
+        // session-owner route, which resolves the owner from the SELECTED
+        // chat (Setup's, profile hermes-setup, since the user is still
+        // sitting in it) and pinned both surfaces' session.create onto
+        // Setup's socket regardless of the swap above. The ref makes the
+        // wrapper dispatch the create leg over the intended profile's own
+        // connection handle (requestGatewayForProfile), the same explicit
+        // routing the whisper already uses for hermes-setup.
+        const intendedProfile = surface === 'bot' && botName ? botName : 'default'
+        const chatTitle = surface === 'bot' ? 'Bot Chat' : botTitle
+        let runtimeId: null | string = null
+
+        handoffCreateProfileRef.current = intendedProfile
+
+        try {
+          runtimeId = await createBackendSessionForSend(
+            brief,
+            buildTaskBotSeedMessages(task, answers, surface, plan),
+            // A bot's chat is its hidden canonical registry row; a session is
+            // an ordinary visible row the user finds by the task's name.
+            surface === 'bot' ? { hidden: true, title: 'Bot Chat' } : { title: botTitle }
+          )
+        } finally {
+          handoffCreateProfileRef.current = null
+        }
 
         if (!runtimeId) {
           throw new Error('task session create failed')
         }
 
         const storedId = $selectedStoredSessionId.get()
+
+        // Verify the leg we just used (never-dead-end contract): the created
+        // chat must exist on the INTENDED profile's backend, or Setup would
+        // "succeed" into a session the sidebar scope hides and the wrong
+        // persona owns. A positive mismatch — the row missing from that
+        // backend's registry, or tagged with another profile — is a failed
+        // authoritative write: surface it as a create failure so the catch
+        // below falls back to building in Setup's own chat. A failed
+        // verification READ stays fail-open (transient list errors must not
+        // destroy a create that already succeeded over the pinned socket).
+        const verification = await requestGatewayForProfile<{ sessions?: { id?: string; profile?: string; resolved_id?: string }[] }>(
+          intendedProfile,
+          'session.list',
+          { include_hidden: true, title: chatTitle }
+        ).catch(() => null)
+
+        if (verification?.sessions) {
+          const createdRow = verification.sessions.find(
+            row => row.id === (storedId ?? runtimeId) || row.resolved_id === runtimeId
+          )
+          const rowProfile = createdRow?.profile == null ? null : normalizeProfileKey(createdRow.profile)
+
+          if (!createdRow || (rowProfile !== null && rowProfile !== normalizeProfileKey(intendedProfile))) {
+            // Same shape as the mid-create drift abort: close the misrouted
+            // session best-effort before surfacing the failure.
+            void requestGatewayForProfile(intendedProfile, 'session.close', { session_id: runtimeId }).catch(
+              () => undefined
+            )
+            throw new Error(
+              `handoff create landed on the wrong profile (wanted "${intendedProfile}", got "${rowProfile ?? 'missing'}")`
+            )
+          }
+        }
 
         if (botName) {
           void stampBotMeta(requestGateway, botName, {
@@ -893,7 +980,10 @@ export function ContribWiring({ children }: { children: ReactNode }) {
         // The go signal — Setup's brief lands as the user's first visible
         // turn in the new chat, and the build starts from it. Painted
         // optimistically (same trick as the guide greeting) so the new chat
-        // never opens empty while the submit round-trips.
+        // never opens empty while the submit round-trips. Routed explicitly
+        // over the intended profile — the session lives on THAT backend; the
+        // owner route would re-derive the target from selection state that a
+        // create response without a stored id leaves parked on Setup's chat.
         setMessages(current => [
           ...current,
           {
@@ -905,7 +995,8 @@ export function ContribWiring({ children }: { children: ReactNode }) {
         ])
         setAwaitingResponse(true)
         setBusy(true)
-        await requestGateway(
+        await requestGatewayForProfile(
+          intendedProfile,
           'prompt.submit',
           { session_id: runtimeId, text: brief },
           PROMPT_SUBMIT_REQUEST_TIMEOUT_MS
