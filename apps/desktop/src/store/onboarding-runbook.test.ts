@@ -60,4 +60,36 @@ describe('the onboarding runbook', () => {
     expect(runbook).not.toContain('include the line')
     expect(runbook).toContain('alone as its own paragraph')
   })
+
+  // The tour has nothing to show until the layout pick has assembled the app
+  // around the chat — before it, the window IS the conversation.
+  it('offers the look around after the layout, with all three ways out', () => {
+    const runbook = buildChatOnboardingPrompt()
+
+    expect(runbook.indexOf('Want a look around first?')).toBeGreaterThan(runbook.indexOf('step="layout"'))
+
+    for (const option of ['Show me around', 'Just the basics', "I'll figure it out"]) {
+      expect(runbook).toContain(option)
+    }
+
+    // Selectors come from the tool, not from the model's imagination.
+    expect(runbook).toMatch(/action="targets" FIRST/)
+  })
+
+  // There is one place a first build can land: a session on the user's own
+  // profile. A surface attribute in the script is the model being asked to
+  // choose between shapes the app no longer has.
+  it('hands off without a surface choice', () => {
+    const runbook = buildChatOnboardingPrompt()
+
+    expect(runbook).toContain('step="handoff"')
+    expect(runbook).not.toMatch(/surface=/)
+  })
+
+  // Setup's proactivity rides the build's own progress (first-build.ts). A
+  // cron scheduled at handoff fires tomorrow, about a task that finished in
+  // four minutes.
+  it('never tells Setup to schedule itself a check-in', () => {
+    expect(buildChatOnboardingPrompt()).not.toMatch(/cron/i)
+  })
 })
