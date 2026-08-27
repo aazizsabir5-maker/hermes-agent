@@ -8,7 +8,8 @@ import {
   machineIsSpark,
   machineKind,
   machineLooksNew,
-  machineSetupLeads
+  machineSetupLeads,
+  machineUserName
 } from './machine'
 import { forkFallbackOptions, forkOptions, machineForkOption } from './onboarding-wizard'
 
@@ -19,6 +20,7 @@ const profile = (patch: Partial<DesktopMachineProfile>): DesktopMachineProfile =
   nvidia: false,
   platform: 'darwin',
   release: '24.6.0',
+  username: '',
   ...patch
 })
 
@@ -105,6 +107,35 @@ describe('machine profile', () => {
 
     $machine.set(null)
     expect(machineForkOption()).toBe('Help me set up this computer')
+  })
+
+  it('offers a login name as a suggestion only when it looks like a name', () => {
+    $machine.set(profile({ username: 'alex' }))
+    expect(machineUserName()).toBe('alex')
+
+    $machine.set(profile({ username: 'Austin.Pickett' }))
+    expect(machineUserName()).toBe('Austin.Pickett')
+  })
+
+  it('holds back login handles that are not a name', () => {
+    for (const username of ['user', 'admin', 'administrator', 'default', 'guest', 'me', 'owner', 'root', 'test']) {
+      $machine.set(profile({ username }))
+      expect(machineUserName(), `"${username}" must not be suggested`).toBeNull()
+    }
+  })
+
+  it('holds back an absent or unusable account name', () => {
+    $machine.set(profile({ username: '' }))
+    expect(machineUserName()).toBeNull()
+
+    $machine.set(profile({ username: 'x' }))
+    expect(machineUserName()).toBeNull()
+
+    $machine.set(profile({ username: 'u' }))
+    expect(machineUserName()).toBeNull()
+
+    $machine.set(null)
+    expect(machineUserName()).toBeNull()
   })
 })
 

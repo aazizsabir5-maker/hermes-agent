@@ -11,7 +11,9 @@
  *   (intro seen this launch + wizard settled).
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { $machine } from './machine'
 
 import {
   $onboardingWizard,
@@ -104,5 +106,51 @@ describe('pre-banked greeting', () => {
     expect(first.length).toBeGreaterThan(20)
     expect(first).toContain('call you')
     expect(pickOnboardingGreeting()).toBe(first)
+  })
+})
+
+describe('the OS-name suggestion', () => {
+  afterEach(() => {
+    $machine.set(null)
+  })
+
+  it('offers the account name in the banked greeting when it looks like a name', async () => {
+    const { $onboardingGreeting, pickOnboardingGreeting } = await import('@/components/onboarding-chat/assembly')
+
+    $machine.set({ ageDays: 400, arch: 'x64', model: '', nvidia: false, platform: 'darwin', release: '24.6.0', username: 'alex' })
+    $onboardingGreeting.set('')
+
+    const greeting = pickOnboardingGreeting()
+
+    expect(greeting).toContain('alex')
+    expect(greeting).toContain('if you prefer')
+    expect(pickOnboardingGreeting()).toBe(greeting)
+  })
+
+  it('seeds the same suggested name into the hidden runbook so a one-word yes resolves', async () => {
+    const { buildChatOnboardingSeedMessages } = await import('./onboarding-wizard')
+
+    $machine.set({ ageDays: 400, arch: 'x64', model: '', nvidia: false, platform: 'darwin', release: '24.6.0', username: 'alex' })
+
+    const seeds = buildChatOnboardingSeedMessages('Hi there')
+
+    expect(seeds[0].display_kind).toBe('hidden')
+    expect(seeds[0].content).toContain('"alex"')
+    expect(seeds[0].content).toMatch(/save exactly "alex"/)
+  })
+
+  it('leaves both clean when the account name is not suggestable', async () => {
+    const { buildChatOnboardingSeedMessages } = await import('./onboarding-wizard')
+    const { $onboardingGreeting, pickOnboardingGreeting } = await import('@/components/onboarding-chat/assembly')
+
+    // Blocklisted handle — a login name nobody should be called.
+    $machine.set({ ageDays: 400, arch: 'x64', model: '', nvidia: false, platform: 'darwin', release: '24.6.0', username: 'user' })
+
+    const seeds = buildChatOnboardingSeedMessages('Hi there')
+
+    expect(seeds[0].content).not.toContain('OS account name')
+
+    $onboardingGreeting.set('')
+    expect(pickOnboardingGreeting()).not.toContain('if you prefer')
   })
 })
