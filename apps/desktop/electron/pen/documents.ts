@@ -63,21 +63,35 @@ export async function createLibraryDocument(templateName = 'pencil-new.pen', nam
   return openDocumentByUri(pathToFileURL(newFilePath).href)
 }
 
-/**
- * A web-editor document: hosted by app.pen.dev in a <webview>, with no @ha/*
- * device or IPC host. Persistence (IndexedDB) and the tool surface (WebMCP)
- * live in the page, so hermes only tracks the tab identity here. This is the
- * path that needs neither the installed Pen.app nor its internal modules.
- */
-export function createWebDocument(name?: string): PenDocumentInfo {
-  const docId = randomUUID()
-  const displayName = (name || 'Canvas').slice(0, 60)
+// A minimal valid .pen — the seed a brand-new web canvas loads before the user
+// (or agent) draws anything. Matches pen-embed-demo's DEFAULT_CONTENT; the
+// editor's storage-load resolves to this on first open.
+const DEFAULT_WEB_PEN = JSON.stringify({
+  version: '2.6',
+  children: [
+    { type: 'frame', id: 'frame0', x: 0, y: 0, name: 'Frame', clip: true, width: 800, height: 600, fill: '#FFFFFF', layout: 'none' }
+  ]
+})
 
-  // Non-file URI so every fileURLToPath(...) guard (library, session ties,
-  // checkpoints) skips it — a web document is not a local .pen file.
+/**
+ * A web-editor document: hosted by app.pen.dev/new?embed in a <webview>, with
+ * no @ha/* device or IPC host. Unlike the bundle path, the EMBEDDER owns the
+ * document — so a web canvas is a real .pen in the library, and the embed
+ * bridge's storage-load/write (pen/web-bridge.ts) read/write THIS file. That
+ * folds web canvases into the same library / autosave / checkpoint model as
+ * bundle canvases (git-versioned on disk, not page-local IndexedDB), and needs
+ * neither the installed Pen.app nor its internal modules.
+ */
+export async function createWebDocument(name?: string): Promise<PenDocumentInfo> {
+  const displayName = (name || 'Untitled').slice(0, 60)
+  const filePath = penLibraryPathFor(displayName)
+
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
+  await fs.promises.writeFile(filePath, DEFAULT_WEB_PEN)
+
   const doc: PenDocument = {
-    docId,
-    fileURI: `pen-web://${docId}`,
+    docId: randomUUID(),
+    fileURI: pathToFileURL(filePath).href,
     device: null,
     ipc: null,
     guestWebContentsId: null,
@@ -85,7 +99,7 @@ export function createWebDocument(name?: string): PenDocumentInfo {
     displayName
   }
 
-  documents.set(docId, doc)
+  documents.set(doc.docId, doc)
 
   return describeDocument(doc)
 }

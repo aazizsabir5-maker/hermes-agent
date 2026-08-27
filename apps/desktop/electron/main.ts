@@ -252,8 +252,9 @@ import {
   runPrimaryBackendStartup
 } from './primary-backend-startup'
 import { rehomePrimaryConnection } from './primary-connection-rehome'
-import { findPenInstallation } from './pen-host'
+import { findPenInstallation, penWebEditorEnabled, penWebEditorUrl } from './pen-host'
 import {
+  bindPenWebGuest,
   bindPenWebview,
   closeDocument as closePenDocument,
   closeOtherPenDocuments,
@@ -261,6 +262,7 @@ import {
   documentIsOpen,
   handlePenProtocolRequest,
   isPenAgentHidden,
+  isPenWebUrl,
   onPenEvent,
   openPenCanvas,
   PEN_PROTOCOL,
@@ -1363,6 +1365,8 @@ function registerMediaProtocol() {
 // ---------------------------------------------------------------------------
 
 const PEN_PRELOAD_PATH = path.join(APP_ROOT, 'dist', 'pen-preload.cjs')
+// The web-editor (app.pen.dev/new?embed) embed-bridge port relay.
+const PEN_WEB_PRELOAD_PATH = path.join(APP_ROOT, 'dist', 'pen-web-preload.cjs')
 
 // Which chat session opened each live document — the tie that lets a save-as
 // upgrade the right session's record, and the ✕ forget the right session.
@@ -1495,6 +1499,28 @@ function broadcastPenEvent(event, payload) {
  * attaching guest to its document IPC, remember session ties, autosave.
  */
 function bindPenGuest(guestContents) {
+  // Web-editor guest (app.pen.dev/new?embed): drive it over the embed bridge
+  // (MessagePort) instead of the bundle's hermes-pen:// IPC. Bind on navigate
+  // too — the page reloads on file switch and must re-run the handshake.
+  const isWebGuest = () => penWebEditorEnabled() && isPenWebUrl(guestContents.getURL?.() || '', penWebEditorUrl())
+
+  if (isWebGuest()) {
+    guestContents.on('did-navigate', () => {
+      if (isWebGuest()) {
+        bindPenWebGuest(guestContents)
+      }
+    })
+    bindPenWebGuest(guestContents)
+
+    try {
+      guestContents.setBackgroundColor(getWindowBackgroundColor())
+    } catch {
+      // Cosmetic.
+    }
+
+    return
+  }
+
   // A guest attaches before it navigates, so the hermes-pen:// URL (and its
   // ?doc= id) isn't real yet at attach time. Bind on every navigation —
   // bindPenWebview is idempotent per guest and ignores non-pen URLs.
@@ -1519,8 +1545,18 @@ function bindPenGuest(guestContents) {
 function wirePenWebviewGuests() {
   app.on('web-contents-created', (_event, contents) => {
     contents.on('will-attach-webview', (_e, webPreferences, params) => {
-      if (String(params.src || '').startsWith(`${PEN_PROTOCOL}://`)) {
+      const src = String(params.src || '')
+
+      if (src.startsWith(`${PEN_PROTOCOL}://`)) {
         webPreferences.preload = PEN_PRELOAD_PATH
+        webPreferences.contextIsolation = true
+        webPreferences.nodeIntegration = false
+        webPreferences.sandbox = false
+      } else if (penWebEditorEnabled() && isPenWebUrl(src, penWebEditorUrl())) {
+        // Web-editor guest: the relay preload forwards the embed-bridge port
+        // into the page's main world (pen-web-preload.ts). contextIsolation
+        // stays on; the page is remote, so keep node integration off.
+        webPreferences.preload = PEN_WEB_PRELOAD_PATH
         webPreferences.contextIsolation = true
         webPreferences.nodeIntegration = false
         webPreferences.sandbox = false

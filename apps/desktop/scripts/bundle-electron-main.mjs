@@ -28,6 +28,9 @@ const penPreloadEntry = resolve(root, 'electron/pen-preload.ts')
 // loads through Node's module resolver — a .js preload would be parsed as ESM
 // and its CommonJS require() throws before a single line runs.
 const penPreloadOut = resolve(distDir, 'pen-preload.cjs')
+// The web-editor (app.pen.dev) embed-bridge port relay — see pen/web-bridge.ts.
+const penWebPreloadEntry = resolve(root, 'electron/pen-web-preload.ts')
+const penWebPreloadOut = resolve(distDir, 'pen-web-preload.cjs')
 
 const external = ['electron', 'node-pty', 'get-windows', 'fs']
 // Production bundles bake packaged=true so unpackaged `electron .` still
@@ -83,3 +86,18 @@ await build({
   logLevel: 'info',
 })
 console.log(`bundled ${penPreloadOut}${isDev ? ' (dev)' : ''}`)
+
+// Bundle pen-web-preload.ts → dist/pen-web-preload.cjs (the app.pen.dev embed
+// bridge's MessagePort relay — see electron/pen/web-bridge.ts)
+await build({
+  entryPoints: [penWebPreloadEntry],
+  bundle: true,
+  platform: 'node',
+  format: 'cjs',
+  target: 'node20',
+  outfile: penWebPreloadOut,
+  external,
+  define,
+  logLevel: 'info',
+})
+console.log(`bundled ${penWebPreloadOut}${isDev ? ' (dev)' : ''}`)

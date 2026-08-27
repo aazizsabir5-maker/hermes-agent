@@ -29,4 +29,5 @@ export { handlePenProtocolRequest, PEN_PROTOCOL, penCanvasUrl } from './protocol
 export { shutdownPenHost } from './runtime'
 export { onPenEvent, type PenDocumentInfo } from './state'
 export { type PenToolResult, runPenTool } from './tools'
+export { bindPenWebGuest, isPenWebUrl, shutdownPenWebBridge } from './web-bridge'
 export { bindPenWebview, runPenGuestScript } from './webview'

@@ -37,9 +37,11 @@ export const PEN_SOCKET_APP_NAME = 'hermes'
 // Pencil team: set `HERMES_PEN_WEB=1`. The URL is overridable for dev/staging.
 // ---------------------------------------------------------------------------
 
-/** Default hosted pen.dev editor. `/new` boots a fresh canvas; the app
- *  persists documents to IndexedDB per origin. */
-const PEN_WEB_EDITOR_DEFAULT_URL = 'https://app.pen.dev/new'
+/** Default hosted pen.dev editor, in EMBED mode: `/new?embed` renders no local
+ *  document UI and drives storage + tools over a MessagePort (see
+ *  pen/web-bridge.ts). Hermes owns the document, so persistence is our on-disk
+ *  library, not the page's IndexedDB. */
+const PEN_WEB_EDITOR_DEFAULT_URL = 'https://app.pen.dev/new?embed'
 
 /** True when hermes should embed the hosted web editor rather than the
  *  installed Pen.app bundle. Off by default — the bundle path stays the

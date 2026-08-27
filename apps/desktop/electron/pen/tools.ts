@@ -297,20 +297,15 @@ async function readPenSelection(): Promise<PenToolResult> {
 }
 
 export async function runPenTool(name: string, payload: Record<string, unknown>): Promise<PenToolResult> {
-  // Web-editor mode: tools live in the page (WebMCP), reached over the browser,
-  // not the @ha/* device socket the rungs below dial. That agent<->page bridge
-  // is still being defined with the Pencil team (their app.pen.dev exposes
-  // WebMCP + IndexedDB), so fail loud and specific rather than falling through
-  // to the bundle rungs' "open a canvas" error. See pen-host.ts web-mode notes.
+  // Web-editor mode: proxy the call through the embed bridge's `mcp-tool-call`
+  // over the MessagePort (pen/web-bridge.ts) rather than the @ha/* device
+  // socket the rungs below dial. Names stay in MCP form (underscored) — the
+  // kebab normalization below is a bundle-editor convention. Host actions
+  // (`open`/`close`) never reach here; the renderer handles them.
   if (penWebEditorEnabled()) {
-    return {
-      success: false,
-      error:
-        'Pen web-editor mode is embed-only for now: the canvas is live, but the ' +
-        'agent tool bridge to the hosted editor (WebMCP) is not wired yet. ' +
-        'Drive the canvas in the pane directly, or unset HERMES_PEN_WEB to use ' +
-        'the installed Pen.app tool bridge.'
-    }
+    const { runWebPenTool } = require('./web-bridge')
+
+    return runWebPenTool(name, payload || {})
   }
 
   // Editor-side handlers are kebab-case (get-app-state); the agent tool layer
