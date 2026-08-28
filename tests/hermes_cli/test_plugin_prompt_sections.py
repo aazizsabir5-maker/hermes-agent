@@ -40,6 +40,37 @@ def test_registration_validates_stable_id_position_budget_and_duplicates():
         )
 
 
+def test_only_bundled_plugins_receive_a_separate_large_prompt_budget():
+    manager = PluginManager()
+    with pytest.raises(ValueError):
+        _context(manager).register_system_prompt_section(
+            "example.large", "x", max_chars=20_000
+        )
+
+    bundled = PluginContext(
+        PluginManifest(
+            name="bundled-policy",
+            key="bundled-policy",
+            source="bundled",
+        ),
+        manager,
+    )
+    bundled.register_system_prompt_section(
+        "bundled.large", "b" * 20_000, max_chars=20_000
+    )
+    ordinary = _context(manager, "ordinary")
+    chunk = (MAX_SYSTEM_PROMPT_SECTIONS_TOTAL_CHARS // 2) - 200
+    ordinary.register_system_prompt_section("ordinary.a", "a" * chunk, max_chars=chunk)
+    ordinary.register_system_prompt_section("ordinary.b", "c" * chunk, max_chars=chunk)
+
+    rendered = manager.render_system_prompt_sections({})
+    assert {section.id for section in rendered} == {
+        "bundled.large",
+        "ordinary.a",
+        "ordinary.b",
+    }
+
+
 def test_render_is_deterministic_bounded_and_session_info_is_read_only(caplog):
     manager = PluginManager()
     ctx = _context(manager)

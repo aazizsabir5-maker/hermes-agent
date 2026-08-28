@@ -32,7 +32,8 @@ LEGACY_FILES = (
     ".hermes.md",
 )
 _MAP_RE = re.compile(
-    r".*?DM-(\d{3,})\s+(.+?)\s+\[([^]]+)](?:\s+\(record:\s*DR-(\d{3,})\))?\s*$"
+    r"^(.*?)DM-(\d{3,})\s+(.+?)\s+\[([^]]+)]"
+    r"(?:\s+\(record:\s*DR-(\d{3,})\))?\s*$"
 )
 _RECORD_RE = re.compile(r"^##\s+DR-(\d{3,})\s+[—-]\s+(.+?)\s*$")
 _FIELD_RE = re.compile(r"^-\s+\*\*([^*]+):\*\*\s*(.*?)\s*$")
@@ -85,14 +86,28 @@ def _decision_id(value: str) -> str:
     return f"D-{value}"
 
 
-def _parse_map(text: str) -> list[tuple[str, str, str, str | None]]:
+def _tree_depth(prefix: str) -> int:
+    branch_positions = [prefix.rfind(symbol) for symbol in ("├", "└")]
+    branch_at = max(branch_positions)
+    if branch_at < 0:
+        return 0
+    return (len(prefix[:branch_at].expandtabs(4)) // 4) + 1
+
+
+def _parse_map(text: str) -> list[tuple[str, str, str, str | None, int]]:
     result = []
     for line in _section(text, "Decision tree"):
         match = _MAP_RE.match(line)
         if match:
-            map_number, title, status, record_number = match.groups()
+            prefix, map_number, title, status, record_number = match.groups()
             result.append(
-                (_decision_id(record_number or map_number), title.strip(), status.strip(), record_number)
+                (
+                    _decision_id(record_number or map_number),
+                    title.strip(),
+                    status.strip(),
+                    record_number,
+                    _tree_depth(prefix),
+                )
             )
     return result
 
@@ -173,10 +188,20 @@ def migrate(root: Path) -> tuple[Path, tuple[str, ...]]:
     fidelity = _completion_fidelity(root, boundary)
 
     map_lines = []
-    parent_id = "design boundary"
-    for decision_id, title, status, _record in map_entries:
+    parents_by_depth: dict[int, str] = {}
+    for decision_id, title, status, _record, depth in map_entries:
+        parent_id = (
+            "design boundary"
+            if depth == 0
+            else parents_by_depth.get(depth - 1, "design boundary")
+        )
         map_lines.append(f"- {decision_id} [{status}] {parent_id} → {title}")
-        parent_id = decision_id
+        parents_by_depth[depth] = decision_id
+        parents_by_depth = {
+            level: parent
+            for level, parent in parents_by_depth.items()
+            if level <= depth
+        }
 
     record_lines = []
     for record in records:
@@ -205,7 +230,7 @@ def migrate(root: Path) -> tuple[Path, tuple[str, ...]]:
         if stripped.startswith("-"):
             unresolved.append(re.sub(r"\bDM-(\d{3,})\b", r"D-\1", stripped))
     known_unresolved_ids = " ".join(unresolved)
-    for decision_id, title, status, _record in map_entries:
+    for decision_id, title, status, _record, _depth in map_entries:
         if status.lower() in {"open", "provisional", "reopened", "blocked"} and decision_id not in known_unresolved_ids:
             unresolved.append(f"- {decision_id} — {title} [{status}]")
     if not unresolved:

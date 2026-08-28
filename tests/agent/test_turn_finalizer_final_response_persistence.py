@@ -184,6 +184,50 @@ def test_required_policy_block_replaces_candidate_before_persistence(monkeypatch
     assert "reasoning_content" not in agent.persisted_messages[-1]
 
 
+def test_finalization_integration_error_replaces_candidate_before_persistence(
+    monkeypatch,
+):
+    class BrokenManager:
+        def iter_finalization_policies(self):
+            raise RuntimeError("plugin registry unavailable")
+
+    monkeypatch.setattr(
+        "hermes_cli.plugins.get_plugin_manager", lambda: BrokenManager()
+    )
+    agent = FakeAgent()
+    agent._response_was_previewed = False
+    agent._active_finalization_policy_ids = ("design-completion",)
+    messages = [
+        {"role": "user", "content": "finish it"},
+        {
+            "role": "assistant",
+            "content": "Unsupported completion claim.",
+            "reasoning": "candidate reasoning",
+        },
+    ]
+
+    result = finalize_turn(
+        agent,
+        final_response="Unsupported completion claim.",
+        api_call_count=1,
+        interrupted=False,
+        failed=False,
+        messages=messages,
+        conversation_history=[],
+        effective_task_id="task",
+        turn_id="turn",
+        user_message="finish it",
+        original_user_message="finish it",
+        _should_review_memory=False,
+        _turn_exit_reason="text_response(29 chars)",
+    )
+
+    assert result["failed"] is True
+    assert "Unsupported completion claim" not in result["final_response"]
+    assert "Unsupported completion claim" not in agent.persisted_messages[-1]["content"]
+    assert "reasoning" not in agent.persisted_messages[-1]
+
+
 def test_fallback_timestamp_survives_delayed_sqlite_persistence(
     monkeypatch, tmp_path
 ):

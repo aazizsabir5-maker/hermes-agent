@@ -556,9 +556,11 @@ def _classify_entrypoint_value_kind(value: str) -> str:
 # hooks. They become high-trust prompt bytes and are charged on every turn.
 SYSTEM_PROMPT_SECTION_POSITIONS = frozenset({"after_memory"})
 DEFAULT_SYSTEM_PROMPT_SECTION_MAX_CHARS = 4_000
-MAX_SYSTEM_PROMPT_SECTION_CHARS = 40_000
+MAX_SYSTEM_PROMPT_SECTION_CHARS = 4_000
 MAX_SYSTEM_PROMPT_SECTIONS = 32
-MAX_SYSTEM_PROMPT_SECTIONS_TOTAL_CHARS = 48_000
+MAX_SYSTEM_PROMPT_SECTIONS_TOTAL_CHARS = 8_000
+MAX_BUNDLED_SYSTEM_PROMPT_SECTION_CHARS = 40_000
+MAX_BUNDLED_SYSTEM_PROMPT_SECTIONS_TOTAL_CHARS = 40_000
 _SYSTEM_PROMPT_SECTION_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
 _SYSTEM_PROMPT_SECTION_HEADING_PREFIX = "## Plugin Context: "
 PLUGIN_SECTIONS_START = "<!-- hermes-plugin-sections:start -->"
@@ -1177,6 +1179,7 @@ class PluginSystemPromptSection:
     position: str
     max_chars: int
     plugin: str
+    uses_bundled_budget: bool = False
 
 
 @dataclass(frozen=True)
@@ -3479,14 +3482,20 @@ class PluginContext:
                 "system prompt section position must be one of: "
                 + ", ".join(sorted(SYSTEM_PROMPT_SECTION_POSITIONS))
             )
+        uses_bundled_budget = self.manifest.source == "bundled"
+        max_allowed = (
+            MAX_BUNDLED_SYSTEM_PROMPT_SECTION_CHARS
+            if uses_bundled_budget
+            else MAX_SYSTEM_PROMPT_SECTION_CHARS
+        )
         if (
             isinstance(max_chars, bool)
             or not isinstance(max_chars, int)
-            or not 0 < max_chars <= MAX_SYSTEM_PROMPT_SECTION_CHARS
+            or not 0 < max_chars <= max_allowed
         ):
             raise ValueError(
                 "system prompt section max_chars must be between 1 and "
-                f"{MAX_SYSTEM_PROMPT_SECTION_CHARS}"
+                f"{max_allowed}"
             )
         existing = self._manager._system_prompt_sections.get(id)
         if existing is not None:
@@ -3501,6 +3510,7 @@ class PluginContext:
             position=position,
             max_chars=max_chars,
             plugin=plugin_id,
+            uses_bundled_budget=uses_bundled_budget,
         )
         self._manager._system_prompt_sections[id] = section
         # Record ownership so unload/force-reload removes this section.
@@ -5959,6 +5969,7 @@ class PluginManager:
         frozen_info = types.MappingProxyType(dict(session_info))
         rendered: List[RenderedPluginSystemPromptSection] = []
         total_chars = len(PLUGIN_SECTIONS_START) + len(PLUGIN_SECTIONS_END) + 2
+        bundled_total_chars = 0
         for section_id in sorted(self._system_prompt_sections):
             section = self._system_prompt_sections[section_id]
             if len(rendered) >= MAX_SYSTEM_PROMPT_SECTIONS:
@@ -6015,13 +6026,23 @@ class PluginManager:
             rendered_chars = len(format_system_prompt_section(section.id, text))
             if rendered:
                 rendered_chars += 2  # canonical ``\n\n`` separator
-            if total_chars + rendered_chars > MAX_SYSTEM_PROMPT_SECTIONS_TOTAL_CHARS:
+            aggregate_chars = (
+                bundled_total_chars
+                if section.uses_bundled_budget
+                else total_chars
+            )
+            aggregate_limit = (
+                MAX_BUNDLED_SYSTEM_PROMPT_SECTIONS_TOTAL_CHARS
+                if section.uses_bundled_budget
+                else MAX_SYSTEM_PROMPT_SECTIONS_TOTAL_CHARS
+            )
+            if aggregate_chars + rendered_chars > aggregate_limit:
                 logger.warning(
                     "Plugin system prompt section %s (%s) exceeded the aggregate "
                     "session budget (%d chars) and was skipped",
                     section.id,
                     section.plugin,
-                    MAX_SYSTEM_PROMPT_SECTIONS_TOTAL_CHARS,
+                    aggregate_limit,
                 )
                 continue
             rendered.append(
@@ -6032,7 +6053,10 @@ class PluginManager:
                     plugin=section.plugin,
                 )
             )
-            total_chars += rendered_chars
+            if section.uses_bundled_budget:
+                bundled_total_chars += rendered_chars
+            else:
+                total_chars += rendered_chars
             logger.info(
                 "Session plugin prompt section: id=%s plugin=%s position=%s chars=%d",
                 section.id,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from .policy import DesignCompletionPolicy
@@ -12,13 +13,15 @@ _SKILL_ROOT = _REPO_ROOT / "skills" / "design" / "comprehensive-designer-cogniti
 _VALIDATOR = _SKILL_ROOT / "scripts" / "validate_design_completion.py"
 _LEDGER_TEMPLATE = _SKILL_ROOT / "templates" / "DESIGN-DECISIONS.md"
 _SKILL = _SKILL_ROOT / "SKILL.md"
-_decision_enforced = False
+DECISION_LAUNCH_ENV = "HERMES_INTERNAL_DECISION_ENFORCED"
+_decision_enforced = os.environ.get(DECISION_LAUNCH_ENV) == "1"
 
 
 def enable_decision_enforcement() -> None:
     """Mark this process as launched through the internal ``hermes 1`` entry point."""
     global _decision_enforced
     _decision_enforced = True
+    os.environ[DECISION_LAUNCH_ENV] = "1"
 
 
 def decision_enforcement_enabled() -> bool:

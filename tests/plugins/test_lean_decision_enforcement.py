@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from agent.finalization_policy import FinalizationAction, FinalizationContext
 from plugins.policies.design_enforcement.policy import DesignCompletionPolicy
 
@@ -136,3 +138,29 @@ def test_policy_is_inactive_without_hermes_one_launch_marker(tmp_path):
     assert decision.action is FinalizationAction.ALLOW
     assert decision.reason_code == "not_enforced_launch"
 
+
+@pytest.mark.parametrize(
+    "claim",
+    (
+        "I finished the design.",
+        "I've completed the design.",
+        "We have now delivered the project.",
+        "The work is now done.",
+    ),
+)
+def test_common_first_person_completion_claims_are_validated(tmp_path, claim):
+    validation = _validation(
+        passed=False,
+        reason="unresolved_decisions",
+        diagnostics=("Unresolved consequential decisions: D-007",),
+    )
+    policy = _policy(tmp_path, validation)
+    decision = policy.evaluate(_context(tmp_path, response=claim))
+    assert decision.action is FinalizationAction.BLOCK
+    assert "D-007" in decision.user_message
+
+
+def test_generic_explanation_does_not_create_design_paperwork(tmp_path):
+    policy = _policy(tmp_path)
+    assert policy.applies_to_turn(tmp_path, "Explain how the solar system works") is False
+    assert not (tmp_path / "DESIGN-DECISIONS.md").exists()

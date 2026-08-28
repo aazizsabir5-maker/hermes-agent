@@ -241,6 +241,25 @@ def finalize_turn(
     active_policy_ids = set(
         getattr(agent, "_active_finalization_policy_ids", ()) or ()
     )
+
+    def _replace_candidate_in_messages(replacement: str) -> None:
+        for message in reversed(messages):
+            if not isinstance(message, dict):
+                continue
+            if message.get("role") == "user":
+                break
+            if message.get("role") == "assistant" and not message.get("tool_calls"):
+                message["content"] = replacement
+                message.pop("reasoning", None)
+                message.pop("reasoning_content", None)
+                message.pop("reasoning_details", None)
+                message.pop("anthropic_content_blocks", None)
+                message.pop("codex_reasoning_items", None)
+                message.pop("codex_message_items", None)
+                message.pop(_DB_PERSISTED_MARKER, None)
+                agent._db_flush_scan_prefix = None
+                break
+
     if final_response and not interrupted and active_policy_ids:
         try:
             from agent.finalization_gate import apply_finalization_gate
@@ -275,25 +294,11 @@ def finalize_turn(
                 completed = False
                 failed = True
                 _turn_exit_reason = "decision_completion_claim_blocked"
-            for message in reversed(messages):
-                if not isinstance(message, dict):
-                    continue
-                if message.get("role") == "user":
-                    break
-                if message.get("role") == "assistant" and not message.get("tool_calls"):
-                    message["content"] = final_response
-                    message.pop("reasoning", None)
-                    message.pop("reasoning_content", None)
-                    message.pop("reasoning_details", None)
-                    message.pop("anthropic_content_blocks", None)
-                    message.pop("codex_reasoning_items", None)
-                    message.pop("codex_message_items", None)
-                    message.pop(_DB_PERSISTED_MARKER, None)
-                    agent._db_flush_scan_prefix = None
-                    break
+            _replace_candidate_in_messages(final_response)
         except Exception:
             logger.error("decision completion policy failed", exc_info=True)
             final_response = "This design is not yet complete. The decision ledger could not be validated."
+            _replace_candidate_in_messages(final_response)
             completed = False
             failed = True
             _turn_exit_reason = "decision_completion_policy_error"

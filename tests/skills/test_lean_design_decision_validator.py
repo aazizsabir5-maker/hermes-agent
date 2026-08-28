@@ -142,6 +142,30 @@ def test_unresolved_decisions_and_unqualified_claim_fail_with_ids(tmp_path):
     assert "qualified" in joined.lower()
 
 
+def test_completion_requires_a_decision_record_and_fidelity_qualified_claim(tmp_path):
+    validator = _load_validator()
+    without_records = _valid_ledger().replace(
+        "- D-002 [validated] D-001 → implementation",
+        "- D-002 [context] D-001 → implementation",
+    )
+    start = without_records.index("### D-002")
+    end = without_records.index("## Unresolved consequential decisions")
+    without_records = without_records[:start] + without_records[end:]
+    _write(tmp_path, without_records)
+    result = validator.validate_project(tmp_path)
+    assert result.passed is False
+    assert "record" in "\n".join(result.diagnostics).lower()
+
+    unqualified = _valid_ledger().replace(
+        "Prototype-fidelity design complete for cart through confirmation",
+        "The design is complete",
+    )
+    _write(tmp_path, unqualified)
+    result = validator.validate_project(tmp_path)
+    assert result.passed is False
+    assert "fidelity" in "\n".join(result.diagnostics).lower()
+
+
 def test_missing_ledger_and_malformed_utf8_fail_cleanly(tmp_path):
     validator = _load_validator()
     missing = validator.validate_project(tmp_path)

@@ -24,10 +24,14 @@ _DEFAULT_LEDGER_TEMPLATE = (
     / "templates"
     / "DESIGN-DECISIONS.md"
 )
-_DESIGN_RE = re.compile(
-    r"\b(design|redesign|architect|architecture|experience|system|service|"
-    r"interaction|workflow|policy|product|organization|space|identity|interface|"
-    r"website|dashboard|checkout|page|screen|mobile app|application|prototype|"
+_EXPLICIT_DESIGN_RE = re.compile(
+    r"\b(design|redesign|architect|architecture|prototype|prototyping)\b",
+    re.IGNORECASE,
+)
+_BUILD_DESIGN_RE = re.compile(
+    r"\b(build|create|develop|make|plan|revamp|shape)\b.{0,80}\b("
+    r"service|interaction|workflow|policy|product|organization|space|identity|"
+    r"interface|website|dashboard|checkout|page|screen|mobile app|application|"
     r"brand|logo|presentation|deck|diagram|visual|layout)\b",
     re.IGNORECASE,
 )
@@ -40,6 +44,9 @@ _COMPLETION_CLAIM_RE = re.compile(
     r"\b(is|are|'s|has been|have been)\s+(?:now\s+)?(?:fully\s+)?"
     r"(complete|completed|finished|finalized|done|delivered|shipped)\b|"
     r"\b(production[- ]ready|fully designed|final delivery|completion claim)\b|"
+    r"\b(?:i|we)(?:'ve| have)?\s+(?:now\s+)?(?:fully\s+)?"
+    r"(?:completed|finished|finalized|delivered|shipped)\b|"
+    r"\b(?:i|we)(?:'m| am| are)\s+(?:now\s+)?done\b|"
     r"^(?:done|complete|completed|finished|finalized|delivered|shipped)[.!]?$",
     re.IGNORECASE | re.MULTILINE,
 )
@@ -62,6 +69,10 @@ def _stringify(value: Any) -> str:
 
 def _enabled(value: bool | Callable[[], bool]) -> bool:
     return bool(value() if callable(value) else value)
+
+
+def _is_design_request(text: str) -> bool:
+    return bool(_EXPLICIT_DESIGN_RE.search(text) or _BUILD_DESIGN_RE.search(text))
 
 
 class DesignCompletionPolicy:
@@ -104,7 +115,7 @@ class DesignCompletionPolicy:
         if not _enabled(self.enforced):
             return False
         text = _stringify(user_message)
-        design_request = bool(_DESIGN_RE.search(text))
+        design_request = _is_design_request(text)
         finish_request = bool(_FINISH_REQUEST_RE.search(text))
         if design_request:
             root = Path(project_root).expanduser().resolve(strict=False)
@@ -126,7 +137,7 @@ class DesignCompletionPolicy:
         )
         applicable = (
             runtime_active
-            or bool(_DESIGN_RE.search(request_text))
+            or _is_design_request(request_text)
             or bool(_FINISH_REQUEST_RE.search(request_text))
         )
         if not applicable:

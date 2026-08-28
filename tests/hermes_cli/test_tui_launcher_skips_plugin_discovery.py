@@ -10,6 +10,8 @@ then redoes. Plain chat must still discover plugins.
 from __future__ import annotations
 
 from argparse import Namespace
+import os
+import subprocess
 import sys
 import types
 
@@ -61,3 +63,29 @@ def test_plugin_discovery_runs_for_plain_chat(monkeypatch):
     calls = _install_discover_spy(monkeypatch)
     main_mod._prepare_agent_startup(_args(tui=False, command="chat"))
     assert calls == ["discover"]
+
+
+def test_decision_launch_marker_reaches_the_tui_backend_child(monkeypatch):
+    marker = "HERMES_INTERNAL_DECISION_ENFORCED"
+    monkeypatch.delenv(marker, raising=False)
+    _install_discover_spy(monkeypatch)
+
+    main_mod._prepare_agent_startup(
+        _args(tui=True, decision_enforced=True)
+    )
+
+    assert os.environ.get(marker) == "1"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from plugins.policies.design_enforcement import "
+            "decision_enforcement_enabled; print(decision_enforcement_enabled())",
+        ],
+        cwd=main_mod.PROJECT_ROOT,
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert completed.stdout.strip() == "True"

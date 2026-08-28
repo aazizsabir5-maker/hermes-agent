@@ -37,7 +37,9 @@ Let an operator coordinate a safe evacuation without losing accountability.
 
 ## Decision tree
 DM-010 Incident ownership [committed] (record: DR-010)
-└── DM-020 Offline handoff [reopened] (record: DR-020)
+├── DM-020 Offline handoff [reopened] (record: DR-020)
+└── DM-030 Warden visibility [committed] (record: DR-030)
+    └── DM-031 Status encoding [committed] (record: DR-031)
 
 ## Unresolved in-scope nodes
 - DM-020 — Offline handoff after the radio test invalidated the first choice.
@@ -73,6 +75,36 @@ DM-010 Incident ownership [committed] (record: DR-010)
 - **Downstream consequences:** handoff state remains unresolved
 - **Validation method and result:** failed radio test E-020
 - **Reopen if:** already reopened because E-020 failed
+
+## DR-030 — Warden visibility
+- **Level:** Experience
+- **Status:** committed
+- **Question:** How are wardens visible to command?
+- **Criteria:** scan speed and accessibility
+- **Alternative A:** table
+- **Alternative B:** floor map
+- **Selection:** floor map
+- **Tradeoffs and failure modes:** spatial display uses more room
+- **Evidence:** scan test E-030
+- **Assumptions:** floor geometry is current
+- **Downstream consequences:** status encoding must work on the map
+- **Validation method and result:** scan test passed
+- **Reopen if:** the building plan changes
+
+## DR-031 — Status encoding
+- **Level:** Detail
+- **Status:** committed
+- **Question:** How is warden state encoded?
+- **Criteria:** accessibility and speed
+- **Alternative A:** color alone
+- **Alternative B:** icon and label
+- **Selection:** icon and label
+- **Tradeoffs and failure modes:** denser marks
+- **Evidence:** accessibility review E-031
+- **Assumptions:** labels fit at target resolution
+- **Downstream consequences:** map legend is required
+- **Validation method and result:** accessibility review passed
+- **Reopen if:** target resolution decreases
 """,
         "DESIGN-COMPLETION.json": """{
   "fidelity": "tested operational prototype",
@@ -104,6 +136,10 @@ def test_migrates_legacy_manifests_once_without_mutating_sources(tmp_path):
     assert "commander reachability falls below the response target" in ledger
     assert "already reopened because E-020 failed" in ledger
     assert "D-020 — Offline handoff after the radio test" in ledger
+    assert "D-010 → Offline handoff" in ledger
+    assert "D-010 → Warden visibility" in ledger
+    assert "D-030 → Status encoding" in ledger
+    assert "D-020 → Warden visibility" not in ledger
     assert "D-001" not in ledger
     for name, original in sources.items():
         assert (tmp_path / name).read_text(encoding="utf-8") == original

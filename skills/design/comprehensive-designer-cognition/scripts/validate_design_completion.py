@@ -158,6 +158,10 @@ def validate_project(project_root: str | Path) -> ValidationResult:
     _require_fields(boundary, _BOUNDARY_FIELDS, owner="Boundary", diagnostics=diagnostics)
 
     records = _parse_records(sections.get("Consequential decisions", []), diagnostics)
+    if not records:
+        diagnostics.append(
+            "Completion requires at least one consequential decision record"
+        )
     map_ids: set[str] = set()
     committed_ids: set[str] = set()
     for line in sections.get("Decision map", []):
@@ -200,6 +204,22 @@ def validate_project(project_root: str | Path) -> ValidationResult:
     _require_fields(
         completion, _COMPLETION_FIELDS, owner="Completion status", diagnostics=diagnostics
     )
+    fidelity = completion.get("Fidelity", "")
+    supported_claim = completion.get("Supported claim", "")
+    meaningful_fidelity_tokens = {
+        token
+        for token in re.findall(r"[a-z0-9]+", fidelity.casefold())
+        if len(token) >= 4 and token not in {"fidelity", "tested", "target"}
+    }
+    if (
+        fidelity
+        and supported_claim
+        and meaningful_fidelity_tokens
+        and not any(token in supported_claim.casefold() for token in meaningful_fidelity_tokens)
+    ):
+        diagnostics.append(
+            "Supported claim must be qualified by the stated completion fidelity"
+        )
     if unresolved:
         diagnostics.append(
             "Completion claim is not qualified while consequential decisions remain unresolved"
