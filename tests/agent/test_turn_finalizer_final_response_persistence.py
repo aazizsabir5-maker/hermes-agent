@@ -468,3 +468,36 @@ def test_final_response_fill_invalidates_flush_scan_cursor():
     )
 
     assert agent._db_flush_scan_prefix is None
+
+
+def test_release_persistence_guard_resets_after_persist_failure(tmp_path):
+    agent = FakeAgent()
+    agent._finalization_audit_path = tmp_path / "audit.jsonl"
+
+    def fail_persist(*_args, **_kwargs):
+        raise RuntimeError("disk unavailable")
+
+    agent._persist_session = fail_persist
+    messages = [
+        {"role": "user", "content": "finish"},
+        {"role": "assistant", "content": "complete"},
+    ]
+
+    result = finalize_turn(
+        agent,
+        final_response="complete",
+        api_call_count=1,
+        interrupted=False,
+        failed=False,
+        messages=messages,
+        conversation_history=[],
+        effective_task_id="task",
+        turn_id="turn",
+        user_message="finish",
+        original_user_message="finish",
+        _should_review_memory=False,
+        _turn_exit_reason="text_response",
+    )
+
+    assert agent._finalization_release_persistence_active is False
+    assert "persist_session: disk unavailable" in result["cleanup_errors"]

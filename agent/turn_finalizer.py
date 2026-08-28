@@ -112,7 +112,11 @@ def _prepare_and_gate_final_response(
         except Exception as exc:
             logger.debug("turn-completion explainer failed: %s", exc)
 
-    if final_response and not interrupted:
+    if (
+        final_response
+        and not interrupted
+        and not getattr(agent, "_finalization_buffering_required", False)
+    ):
         try:
             from hermes_cli.lifecycle import invoke_hook
 
@@ -463,6 +467,18 @@ def finalize_turn(
         failed = True
         _turn_exit_reason = "required_finalization_policy_blocked"
 
+    if _finalization_result is not None:
+        _redact_terminal = getattr(
+            agent, "_redact_buffered_terminal_assistant_message", None
+        )
+        if callable(_redact_terminal):
+            for _message in messages:
+                if (
+                    isinstance(_message, dict)
+                    and _message.get("role") == "assistant"
+                ):
+                    _redact_terminal(_message)
+
     # If the loop already appended its candidate assistant row, replace that
     # current-turn row with the host-approved/block response before persistence.
     if final_response and not interrupted and messages:
@@ -707,7 +723,11 @@ def finalize_turn(
             except Exception as _mc_err:
                 logger.info("Micro-compaction failed: %s", _mc_err)
 
-        agent._persist_session(messages, conversation_history)
+        agent._finalization_release_persistence_active = True
+        try:
+            agent._persist_session(messages, conversation_history)
+        finally:
+            agent._finalization_release_persistence_active = False
     except Exception as _persist_err:
         _cleanup_errors.append(f"persist_session: {_persist_err}")
         logger.error("finalize_turn: _persist_session failed: %s", _persist_err, exc_info=True)
