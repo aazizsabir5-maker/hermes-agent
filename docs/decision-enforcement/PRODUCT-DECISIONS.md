@@ -44,6 +44,7 @@ No entry in this document authorizes code changes by itself. Follow the approval
 - **Selection:** One `DESIGN-DECISIONS.md` ledger.
 - **Rejected default:** Eight builder documents plus reviewer report and receipt.
 - **Reason:** One ledger can expose boundary, hierarchy, consequential decisions, unresolved items, validation, and supported completion language without universal paperwork.
+- **Required trace:** Each consequential decision must connect the governing intent and selected direction to a concrete artifact or representation appropriate to the claimed fidelity. Local references must remain inside the project and exist; this checks observable trace structure, not semantic truth.
 - **Tradeoff:** Rich briefs, specifications, screenshots, tests, and audits become proportional supporting evidence rather than universal files.
 - **Reopen if:** Executable tests show that a required property cannot be represented or referenced clearly from one ledger.
 

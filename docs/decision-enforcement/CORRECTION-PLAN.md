@@ -222,6 +222,8 @@ Minimum sections:
 - Evidence
 - Assumptions
 - Consequences
+- Realization status
+- Artifact references
 - Validation
 - Reopen if
 
@@ -259,6 +261,7 @@ Create one ledger with:
 - one intent;
 - one parent and one child decision;
 - one complete consequential record;
+- one trace from the parent intent through the selected decision to a concrete in-scope artifact or representation appropriate to the target fidelity;
 - no unresolved consequential decision;
 - a fidelity-qualified supported claim.
 
@@ -273,6 +276,10 @@ Require controlled failure for:
 - missing tradeoff;
 - missing evidence/assumption distinction;
 - missing consequence;
+- missing realization status;
+- missing artifact/reference trace from intent through selection to the realized design;
+- local artifact reference that does not exist or escapes the project root;
+- a decision marked “not yet realized” combined with a completion claim whose fidelity requires that realization;
 - missing validation status;
 - missing reopening condition;
 - unresolved consequential decision combined with an unqualified completion claim;
@@ -289,10 +296,14 @@ scripts/run_tests.sh tests/skills/test_lean_design_decision_validator.py -q
 Required properties:
 
 - reads one `DESIGN-DECISIONS.md` file;
+- requires each consequential decision to state whether and how it is realized at the target fidelity;
+- requires project-relative artifact or representation references that connect the selected decision to observable output, and verifies that local references exist beneath the project root;
+- permits “not yet realized” only when the supported claim is explicitly below the fidelity that would require realization;
 - produces concise actionable diagnostics;
 - has no receipt, snapshot, session, HMAC, project-mode, or binary-evidence logic;
 - does not claim to judge the quality or truth of decisions;
 - exits `0` only when the observable decision contract is structurally satisfied.
+- does not infer that an artifact reference proves semantic correctness; it verifies trace structure, reference scope, and local existence only.
 
 **Step 5: Simplify initialization**
 

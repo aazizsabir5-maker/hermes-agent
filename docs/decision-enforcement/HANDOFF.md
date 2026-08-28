@@ -151,12 +151,14 @@ The final implementation must demonstrate:
 3. Normal exploration is not blocked.
 4. A claimed completion with no ledger is blocked with a specific explanation.
 5. A committed decision lacking alternatives/tradeoff/evidence/consequence/validation/reopening information blocks completion.
-6. Unresolved consequential decision IDs are surfaced directly.
-7. Provisional or “ready for next commitment” language remains allowed.
-8. A structurally valid ledger allows a fidelity-qualified completion statement.
-9. Restarting Hermes does not invalidate the ledger or require review-session choreography.
-10. Plain `hermes` is unaffected.
-11. Existing strict-protocol projects can migrate once without invented content or silent data loss.
+6. A consequential decision without a trace from intent and selection to a concrete project-relative artifact or representation blocks completion at fidelities that require realization.
+7. A missing, out-of-root, or nonexistent local artifact reference blocks completion; structural reference validation does not claim semantic correctness.
+8. Unresolved consequential decision IDs are surfaced directly.
+9. Provisional or “ready for next commitment” language remains allowed.
+10. A structurally valid ledger with fidelity-appropriate realization references allows a fidelity-qualified completion statement.
+11. Restarting Hermes does not invalidate the ledger or require review-session choreography.
+12. Plain `hermes` is unaffected.
+13. Existing strict-protocol projects can migrate once without invented content or silent data loss.
 
 ## Complexity budget
 
