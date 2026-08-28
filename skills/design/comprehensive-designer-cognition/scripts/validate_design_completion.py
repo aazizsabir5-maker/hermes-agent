@@ -164,6 +164,7 @@ def validate_project(project_root: str | Path) -> ValidationResult:
         )
     map_ids: set[str] = set()
     committed_ids: set[str] = set()
+    unresolved_status_ids: set[str] = set()
     for line in sections.get("Decision map", []):
         stripped = line.strip()
         if not stripped or not stripped.startswith("-"):
@@ -178,8 +179,11 @@ def validate_project(project_root: str | Path) -> ValidationResult:
         map_ids.add(decision_id)
         if "→" not in relationship and "->" not in relationship:
             diagnostics.append(f"{decision_id} must trace a parent → child relationship")
-        if status.strip().lower() in {"committed", "validated"}:
+        normalized_status = status.strip().lower()
+        if normalized_status in {"committed", "validated"}:
             committed_ids.add(decision_id)
+        elif normalized_status in {"open", "provisional", "reopened", "blocked"}:
+            unresolved_status_ids.add(decision_id)
     if not map_ids:
         diagnostics.append("Decision map must contain at least one parent → child entry")
     for decision_id in sorted(committed_ids - records.keys()):
@@ -191,6 +195,15 @@ def validate_project(project_root: str | Path) -> ValidationResult:
         if line.strip().startswith("-")
     ]
     unresolved = [item for item in unresolved_lines if item.lower() not in {"none", "none."}]
+    disclosed_unresolved_ids = {
+        decision_id
+        for item in unresolved
+        for decision_id in _DECISION_ID_RE.findall(item)
+    }
+    for decision_id in sorted(unresolved_status_ids - disclosed_unresolved_ids):
+        diagnostics.append(
+            f"{decision_id} has an unresolved map status but is not disclosed as unresolved"
+        )
     if unresolved:
         ids = sorted({item for line in unresolved for item in _DECISION_ID_RE.findall(line)})
         detail = ", ".join(ids) if ids else "; ".join(unresolved)
@@ -209,7 +222,7 @@ def validate_project(project_root: str | Path) -> ValidationResult:
     meaningful_fidelity_tokens = {
         token
         for token in re.findall(r"[a-z0-9]+", fidelity.casefold())
-        if len(token) >= 4 and token not in {"fidelity", "tested", "target"}
+        if len(token) >= 2 and token not in {"fidelity", "tested", "target"}
     }
     if (
         fidelity

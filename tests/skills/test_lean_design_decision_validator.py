@@ -166,6 +166,30 @@ def test_completion_requires_a_decision_record_and_fidelity_qualified_claim(tmp_
     assert "fidelity" in "\n".join(result.diagnostics).lower()
 
 
+def test_open_map_status_must_be_disclosed_and_short_fidelity_must_qualify_claim(
+    tmp_path,
+):
+    validator = _load_validator()
+    silently_open = _valid_ledger().replace(
+        "- D-001 [context] situation → intent",
+        "- D-001 [open] situation → intent",
+    )
+    _write(tmp_path, silently_open)
+    result = validator.validate_project(tmp_path)
+    assert result.passed is False
+    assert "D-001" in "\n".join(result.diagnostics)
+
+    short_fidelity = _valid_ledger().replace("Tested prototype", "MVP")
+    short_fidelity = short_fidelity.replace(
+        "Prototype-fidelity design complete for cart through confirmation",
+        "The design is complete",
+    )
+    _write(tmp_path, short_fidelity)
+    result = validator.validate_project(tmp_path)
+    assert result.passed is False
+    assert "fidelity" in "\n".join(result.diagnostics).lower()
+
+
 def test_missing_ledger_and_malformed_utf8_fail_cleanly(tmp_path):
     validator = _load_validator()
     missing = validator.validate_project(tmp_path)

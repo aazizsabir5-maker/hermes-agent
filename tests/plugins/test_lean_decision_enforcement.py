@@ -160,7 +160,15 @@ def test_common_first_person_completion_claims_are_validated(tmp_path, claim):
     assert "D-007" in decision.user_message
 
 
-def test_generic_explanation_does_not_create_design_paperwork(tmp_path):
+@pytest.mark.parametrize(
+    "user_text",
+    (
+        "Explain how the solar system works",
+        "Explain CPU architecture",
+        "What does prototyping mean?",
+    ),
+)
+def test_generic_explanation_does_not_create_design_paperwork(tmp_path, user_text):
     policy = _policy(tmp_path)
-    assert policy.applies_to_turn(tmp_path, "Explain how the solar system works") is False
+    assert policy.applies_to_turn(tmp_path, user_text) is False
     assert not (tmp_path / "DESIGN-DECISIONS.md").exists()

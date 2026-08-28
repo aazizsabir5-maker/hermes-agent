@@ -25,7 +25,12 @@ _DEFAULT_LEDGER_TEMPLATE = (
     / "DESIGN-DECISIONS.md"
 )
 _EXPLICIT_DESIGN_RE = re.compile(
-    r"\b(design|redesign|architect|architecture|prototype|prototyping)\b",
+    r"\b(design|redesign|architect|prototype)\b",
+    re.IGNORECASE,
+)
+_EXPLANATORY_RE = re.compile(
+    r"^\s*(explain|define|what\s+(?:is|are|does|do)|how\s+(?:does|do)|"
+    r"tell\s+me\s+about|why\s+(?:is|are|does|do))\b",
     re.IGNORECASE,
 )
 _BUILD_DESIGN_RE = re.compile(
@@ -72,6 +77,8 @@ def _enabled(value: bool | Callable[[], bool]) -> bool:
 
 
 def _is_design_request(text: str) -> bool:
+    if _EXPLANATORY_RE.search(text):
+        return False
     return bool(_EXPLICIT_DESIGN_RE.search(text) or _BUILD_DESIGN_RE.search(text))
 
 
