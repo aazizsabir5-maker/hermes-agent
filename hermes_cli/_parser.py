@@ -151,6 +151,12 @@ def build_top_level_parser():
         "--version", "-V", action="store_true", help="Show version and exit"
     )
     parser.add_argument(
+        "--decision-enforced",
+        action="store_true",
+        default=False,
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
         "-z",
         "--oneshot",
         metavar="PROMPT",

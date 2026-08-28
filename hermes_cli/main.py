@@ -12520,8 +12520,18 @@ def _should_background_mcp_startup(args) -> bool:
     return args.command in {None, "chat", "rl"}
 
 
+def _apply_decision_launch_marker(args) -> None:
+    """Activate the internal launch context carried by ``scripts/hermes-one``."""
+    if not getattr(args, "decision_enforced", False):
+        return
+    from plugins.policies.design_enforcement import enable_decision_enforcement
+
+    enable_decision_enforcement()
+
+
 def _prepare_agent_startup(args) -> None:
     """Discover plugins/MCP/hooks for commands that can run an agent turn."""
+    _apply_decision_launch_marker(args)
     # --yolo: chokepoint guarantee that HERMES_YOLO_MODE is set before ANY
     # plugin/tool discovery below imports tools.approval, which freezes
     # _YOLO_MODE_FROZEN at import time (PR #7994 security design).  main()'s

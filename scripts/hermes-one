@@ -1,0 +1,11 @@
+#!/bin/sh
+
+fork_executable="/Users/ariansabir/Developer/hermes-agent-enforced/.venv/bin/hermes"
+
+if [ ! -x "$fork_executable" ]; then
+    echo "hermes 1 cannot find the maintained decision-enforcement fork." >&2
+    echo "Repair: python -m venv /Users/ariansabir/Developer/hermes-agent-enforced/.venv && /Users/ariansabir/Developer/hermes-agent-enforced/.venv/bin/python -m pip install -e /Users/ariansabir/Developer/hermes-agent-enforced" >&2
+    exit 127
+fi
+
+exec "$fork_executable" --profile decision --decision-enforced "$@"
