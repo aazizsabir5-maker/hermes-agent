@@ -82,6 +82,13 @@ refused for applicable required-policy turns because those runtimes can emit or
 persist model output outside the local finalization boundary. Use a locally
 gated Hermes provider path for enforced completion turns.
 
+When buffering is armed, ordinary output-transform and observability hooks receive
+no candidate payload. Usage metadata may still be reported, but assistant prose,
+provider reasoning fields, and tool-call names/arguments are withheld. Incremental
+session writes store only redacted assistant rows until the release gate persists
+the approved response. A host-level return backstop finalizes any inner-loop early
+return that lacks finalization metadata.
+
 To preserve the audited release hash, late delivery-surface media-path repair and
 API data-URL rewriting are disabled for gated responses. Ensure any `MEDIA:`
 references are canonical before the finalization turn.

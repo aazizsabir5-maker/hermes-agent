@@ -74,6 +74,10 @@ def test_required_policy_redacts_interim_text_before_tool_turn_persistence():
         "role": "assistant",
         "content": "candidate completion",
         "reasoning": "candidate reasoning",
+        "reasoning_content": "candidate reasoning content",
+        "reasoning_details": [{"text": "candidate detail"}],
+        "anthropic_content_blocks": [{"thinking": "candidate thought"}],
+        "codex_reasoning_items": [{"summary": "candidate summary"}],
         "codex_message_items": [{"phase": "commentary"}],
         "tool_calls": [{"id": "call-1"}],
     }
@@ -82,6 +86,37 @@ def test_required_policy_redacts_interim_text_before_tool_turn_persistence():
         "role": "assistant",
         "content": "",
         "tool_calls": [{"id": "call-1"}],
+    }
+
+
+def test_terminal_redaction_scrubs_tool_call_payloads():
+    agent = SimpleNamespace(_finalization_buffering_required=True)
+    agent._redact_buffered_interim_assistant_message = (
+        lambda message: AIAgent._redact_buffered_interim_assistant_message(
+            agent, message
+        )
+    )
+    message = {
+        "role": "assistant",
+        "content": "candidate",
+        "tool_calls": [
+            {
+                "id": "call-1",
+                "type": "function",
+                "function": {
+                    "name": "CANDIDATE_SECRET_TOOL",
+                    "arguments": '{"secret":"CANDIDATE_SECRET"}',
+                },
+            }
+        ],
+    }
+
+    AIAgent._redact_buffered_terminal_assistant_message(agent, message)
+
+    assert message["content"] == ""
+    assert message["tool_calls"][0]["function"] == {
+        "name": "buffered_tool",
+        "arguments": "{}",
     }
 
 
