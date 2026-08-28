@@ -237,6 +237,11 @@ class SubagentLifecycleService:
             parent_agent=parent,
             role=request.role,
         )
+        if request.working_directory is not None:
+            # _validate_request permits this only for a profile-owned immutable
+            # snapshot with file-readonly tools. The reviewer must not recurse
+            # into the design-completion policy it is gathering evidence for.
+            child._trusted_readonly_review_session = True
         subagent_id = str(getattr(child, "_subagent_id", "") or "")
         if not subagent_id:
             raise SubagentLifecycleError("Hermes failed to assign a child identity.")

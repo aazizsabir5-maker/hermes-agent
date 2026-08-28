@@ -102,6 +102,9 @@ def test_readonly_review_snapshot_workdir_is_narrowly_allowed(
         working_directory=str(snapshot),
     )
     handle = lifecycle.launch(request)
+    record = lifecycle._record(handle)
+    assert record is not None and record.agent is not None
+    assert record.agent._trusted_readonly_review_session is True
     assert lifecycle.wait(handle, timeout_seconds=1).state is SubagentState.SUCCEEDED
 
     outside = tmp_path / "outside"
