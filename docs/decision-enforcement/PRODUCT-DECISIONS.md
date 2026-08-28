@@ -98,7 +98,7 @@ No entry in this document authorizes code changes by itself. Follow the approval
 
 ## P-010 — Every retained backend hunk needs a North-Star justification
 
-- **Status:** committed
+- **Status:** proposed
 - **Question:** How should implementation scope be controlled?
 - **Selection:** Maintain a requirement-to-diff matrix during correction.
 - **Rule:** Every retained production hunk must support the single invariant, mandatory skill injection, the one-ledger check, or the `hermes 1` experience.
