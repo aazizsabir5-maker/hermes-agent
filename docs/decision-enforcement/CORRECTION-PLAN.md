@@ -273,6 +273,7 @@ Require controlled failure for:
 - missing ledger;
 - missing boundary;
 - committed decision without a record;
+- consequential decision record with no selected direction (`Selection`);
 - missing meaningful alternative without a stated “no credible alternative” reason;
 - missing tradeoff;
 - missing evidence/assumption distinction;
@@ -283,7 +284,7 @@ Require controlled failure for:
 - a decision marked “not yet realized” combined with a completion claim whose fidelity requires that realization;
 - missing validation status;
 - missing reopening condition;
-- unresolved consequential decision combined with an unqualified completion claim;
+- unresolved in-scope consequential decision combined with an otherwise structurally valid, fidelity-qualified completion claim; require diagnostics to identify each unresolved decision ID rather than returning only a generic block;
 - malformed UTF-8 or malformed structure.
 
 **Step 3: Verify RED**

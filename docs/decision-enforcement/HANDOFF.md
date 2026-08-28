@@ -150,10 +150,10 @@ The final implementation must demonstrate:
 2. Hermes creates one decision ledger automatically.
 3. Normal exploration is not blocked.
 4. A claimed completion with no ledger is blocked with a specific explanation.
-5. A committed decision lacking alternatives/tradeoff/evidence/consequence/validation/reopening information blocks completion.
+5. A committed consequential decision lacking a selected direction, alternatives/tradeoff/evidence/consequence/validation/reopening information blocks completion; omission of each field is tested independently.
 6. A consequential decision without a trace from intent and selection to a concrete project-relative artifact or representation blocks completion at fidelities that require realization.
 7. A missing, out-of-root, or nonexistent local artifact reference blocks completion; structural reference validation does not claim semantic correctness.
-8. Unresolved consequential decision IDs are surfaced directly.
+8. An unresolved in-scope consequential decision blocks even an otherwise valid fidelity-qualified completion claim, and every unresolved decision ID is surfaced directly.
 9. Provisional or “ready for next commitment” language remains allowed.
 10. A structurally valid ledger with fidelity-appropriate realization references allows a fidelity-qualified completion statement.
 11. Restarting Hermes does not invalidate the ledger or require review-session choreography.
