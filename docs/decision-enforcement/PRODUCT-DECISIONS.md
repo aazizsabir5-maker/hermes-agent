@@ -6,7 +6,7 @@ These entries separate user-confirmed direction from recommended corrections tha
 - **proposed** — recommended by the review and correction plan but not authorization to implement;
 - **implemented** — reserved for behavior merged and verified in the corrected fork.
 
-No entry in this document authorizes code changes by itself. Follow the approval checkpoint in `CORRECTION-PLAN.md`.
+No entry in this document authorizes code changes by itself. Follow the approval checkpoint in `CORRECTION-PLAN.md`. The user may explicitly reopen any entry; doing so requires updating the North Star, affected product decisions, claim boundary, correction plan, and tests together so a fresh session does not inherit contradictory guidance.
 
 ## P-001 — Optimize for decision discipline, not provenance infrastructure
 
@@ -75,7 +75,7 @@ No entry in this document authorizes code changes by itself. Follow the approval
 - **Selection:** Scope- and fidelity-qualified claims only.
 - **Examples:** Concept complete, system specified, high-fidelity artifact complete, or production implementation complete for a stated scope.
 - **Reason:** “Complete” without fidelity silently overstates what was designed and validated.
-- **Reopen if:** Never; wording may evolve, but the qualification principle remains.
+- **Reopen if:** The user explicitly changes the completion semantics and the revised wording, evidence requirements, claim boundary, and tests still prevent unsupported scope or fidelity claims.
 
 ## P-008 — Do not claim private cognition or objective truth
 
@@ -84,7 +84,7 @@ No entry in this document authorizes code changes by itself. Follow the approval
 - **Selection:** Observable decision records and completion discipline only.
 - **Non-claims:** Private reasoning, objective quality, evidence truth, reviewer intelligence, and permanent correctness.
 - **Reason:** Runtime procedures cannot establish those properties.
-- **Reopen if:** Never without materially new technical evidence and an independently reviewed claim boundary.
+- **Reopen if:** Materially new technical evidence supports a narrower revised claim, an independent review validates that claim boundary, and the user explicitly approves the corresponding North-Star and test changes.
 
 ## P-009 — Provide one-way migration, not permanent dual modes
 
@@ -103,4 +103,4 @@ No entry in this document authorizes code changes by itself. Follow the approval
 - **Selection:** Maintain a requirement-to-diff matrix during correction.
 - **Rule:** Every retained production hunk must support the single invariant, mandatory skill injection, the one-ledger check, or the `hermes 1` experience.
 - **Reason:** This prevents provenance machinery from surviving through inertia.
-- **Reopen if:** Never; new requirements can be added, but they must be explicit and approved.
+- **Reopen if:** The user explicitly approves a different complexity-control mechanism that still maps every retained production change to a documented requirement and test.
