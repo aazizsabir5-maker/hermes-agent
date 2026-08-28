@@ -41,9 +41,7 @@ class FakeChild:
 
 @pytest.fixture
 def lifecycle(monkeypatch):
-    parent = SimpleNamespace(
-        session_id="parent-1", enabled_toolsets=["file", "file-readonly"]
-    )
+    parent = SimpleNamespace(session_id="parent-1", enabled_toolsets=["file"])
     counter = iter(range(1000))
 
     def build(**_kwargs):
@@ -86,37 +84,6 @@ def test_cancel_is_cooperative_and_forged_handle_is_unknown(lifecycle):
     other_parent = SimpleNamespace(session_id="different-parent")
     other_service = SubagentLifecycleService(lambda: other_parent)
     assert other_service.status(handle).state is SubagentState.UNKNOWN
-
-
-def test_readonly_review_snapshot_workdir_is_narrowly_allowed(
-    lifecycle, monkeypatch, tmp_path
-):
-    home = tmp_path / "home"
-    snapshot = home / "enforcement" / "design-snapshots" / ("a" * 64)
-    snapshot.mkdir(parents=True)
-    monkeypatch.setattr("hermes_cli.config.get_hermes_home", lambda: home)
-
-    request = SubagentLaunchRequest(
-        goal="review",
-        allowed_toolsets=("file-readonly",),
-        working_directory=str(snapshot),
-    )
-    handle = lifecycle.launch(request)
-    record = lifecycle._record(handle)
-    assert record is not None and record.agent is not None
-    assert record.agent._trusted_readonly_review_session is True
-    assert lifecycle.wait(handle, timeout_seconds=1).state is SubagentState.SUCCEEDED
-
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    with pytest.raises(SubagentLifecycleError, match="trusted read-only"):
-        lifecycle.launch(
-            SubagentLaunchRequest(
-                goal="escape",
-                allowed_toolsets=("file-readonly",),
-                working_directory=str(outside),
-            )
-        )
 
 
 def test_cancel_uses_explicit_hard_interrupt(lifecycle):

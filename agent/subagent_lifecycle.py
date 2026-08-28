@@ -19,7 +19,6 @@ import threading
 import time
 from contextlib import contextmanager
 from concurrent.futures import Future, TimeoutError
-from pathlib import Path
 from typing import Any, Callable, Mapping, Optional
 
 from agent.interrupt_compat import request_hard_interrupt
@@ -146,7 +145,6 @@ class _Record:
     started_at: Optional[float] = None
     completed_at: Optional[float] = None
     result: Optional[SubagentResult] = None
-    working_directory: Optional[str] = None
 
 
 class _Registry:
@@ -237,11 +235,6 @@ class SubagentLifecycleService:
             parent_agent=parent,
             role=request.role,
         )
-        if request.working_directory is not None:
-            # _validate_request permits this only for a profile-owned immutable
-            # snapshot with file-readonly tools. The reviewer must not recurse
-            # into the design-completion policy it is gathering evidence for.
-            child._trusted_readonly_review_session = True
         subagent_id = str(getattr(child, "_subagent_id", "") or "")
         if not subagent_id:
             raise SubagentLifecycleError("Hermes failed to assign a child identity.")
@@ -258,13 +251,7 @@ class SubagentLifecycleService:
             int(getattr(child, "_delegate_depth", 1) or 1),
             self._capability(subagent_id, parent_session_id, created),
         )
-        record = _Record(
-            handle,
-            SubagentState.PENDING,
-            created,
-            agent=child,
-            working_directory=request.working_directory,
-        )
+        record = _Record(handle, SubagentState.PENDING, created, agent=child)
         with _REGISTRY.lock:
             _REGISTRY.records[subagent_id] = record
             if request.correlation_id:
@@ -428,16 +415,8 @@ class SubagentLifecycleService:
             record.updated_at = record.started_at
         try:
             from tools.delegate_tool import _run_child_lifecycle
-            token = None
-            if record.working_directory:
-                from agent.runtime_cwd import set_session_cwd
 
-                token = set_session_cwd(record.working_directory)
-            try:
-                raw = _run_child_lifecycle(0, goal, record.agent, parent)
-            finally:
-                if token is not None:
-                    token.var.reset(token)
+            raw = _run_child_lifecycle(0, goal, record.agent, parent)
             status = (
                 str(raw.get("status", "error")) if isinstance(raw, dict) else "error"
             )
@@ -531,24 +510,9 @@ class SubagentLifecycleService:
                 "Per-launch timeout is not supported; configure delegation timeout explicitly."
             )
         if request.working_directory is not None:
-            from hermes_cli.config import get_hermes_home
-
-            try:
-                working_directory = Path(request.working_directory).resolve(strict=True)
-                trusted_root = (
-                    get_hermes_home() / "enforcement" / "design-snapshots"
-                ).resolve(strict=True)
-                working_directory.relative_to(trusted_root)
-            except (OSError, RuntimeError, ValueError) as exc:
-                raise SubagentLifecycleError(
-                    "working_directory is only supported for trusted read-only review snapshots."
-                ) from exc
-            if not working_directory.is_dir() or request.allowed_toolsets != (
-                "file-readonly",
-            ):
-                raise SubagentLifecycleError(
-                    "review snapshots require the file-readonly toolset."
-                )
+            raise SubagentLifecycleError(
+                "working_directory is not supported because Hermes delegates use isolated task environments."
+            )
         if request.blocked_tools:
             raise SubagentLifecycleError(
                 "Per-tool blocking is not supported; use allowed_toolsets. Hermes always blocks unsafe child tools."
@@ -570,14 +534,9 @@ class SubagentLifecycleService:
                     f"Unknown toolsets: {', '.join(sorted(unknown))}."
                 )
             enabled = getattr(parent, "enabled_toolsets", None)
-            requested_toolsets = set(request.allowed_toolsets)
-            if (
-                enabled is not None
-                and "file-readonly" in requested_toolsets
-                and "file" in set(enabled)
+            if enabled is not None and not set(request.allowed_toolsets).issubset(
+                set(enabled)
             ):
-                requested_toolsets.remove("file-readonly")
-            if enabled is not None and not requested_toolsets.issubset(set(enabled)):
                 raise SubagentLifecycleError(
                     "Requested toolsets would broaden parent permissions."
                 )
