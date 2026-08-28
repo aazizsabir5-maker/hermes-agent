@@ -278,7 +278,7 @@ Require controlled failure for:
 - missing consequence;
 - missing realization status;
 - missing artifact/reference trace from intent through selection to the realized design;
-- local artifact reference that does not exist or escapes the project root;
+- local artifact reference that does not exist, is absolute, or resolves outside the project root (including symlink escape);
 - a decision marked “not yet realized” combined with a completion claim whose fidelity requires that realization;
 - missing validation status;
 - missing reopening condition;
