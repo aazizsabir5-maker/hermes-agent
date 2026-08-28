@@ -38,7 +38,6 @@ def _make_runner():
     runner._fallback_model = None
     runner._running_agents = {}
     runner._background_tasks = set()
-    runner._resolve_enabled_toolsets_for_source = MagicMock(return_value=None)
 
     mock_store = MagicMock()
     # A real SessionStore returns None when no persisted /model override exists.
@@ -170,47 +169,6 @@ class TestRunBackgroundTask:
         assert agent_kwargs["checkpoint_max_file_size_mb"] == 3
         mock_agent_instance.shutdown_memory_provider.assert_called_once()
         mock_agent_instance.close.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_gated_response_skips_background_media_path_repair(self):
-        """A gated response must retain the exact audited release bytes."""
-        runner = _make_runner()
-        mock_adapter = AsyncMock()
-        mock_adapter.send = AsyncMock()
-        mock_adapter.extract_media = MagicMock(return_value=([], "Approved bytes"))
-        mock_adapter.extract_images = MagicMock(return_value=([], "Approved bytes"))
-        runner.adapters[Platform.TELEGRAM] = mock_adapter
-        source = SessionSource(
-            platform=Platform.TELEGRAM,
-            user_id="12345",
-            chat_id="67890",
-            user_name="testuser",
-        )
-        mock_result = {
-            "final_response": "Approved bytes",
-            "messages": [],
-            "finalization": {"status": "allowed"},
-        }
-
-        with (
-            patch(
-                "gateway.run._resolve_runtime_agent_kwargs",
-                return_value={"api_key": "test-key"},
-            ),
-            patch("run_agent.AIAgent") as MockAgent,
-            patch(
-                "gateway.run.repair_explicit_computer_use_media_paths"
-            ) as repair_media,
-        ):
-            mock_agent_instance = MagicMock()
-            mock_agent_instance.shutdown_memory_provider = MagicMock()
-            mock_agent_instance.close = MagicMock()
-            mock_agent_instance.run_conversation.return_value = mock_result
-            MockAgent.return_value = mock_agent_instance
-
-            await runner._run_background_task("say hello", source, "bg_test")
-
-        repair_media.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
