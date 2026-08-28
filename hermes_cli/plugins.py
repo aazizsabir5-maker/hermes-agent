@@ -159,19 +159,6 @@ _install_plugin_debug_handler()
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-TRUSTED_BUNDLED_POLICY_PLUGIN_KEYS = frozenset({"policies/design_enforcement"})
-
-
-def _record_manifest_winner(winners: Dict[str, Any], manifest: Any) -> None:
-    """Record a manifest without allowing trusted policy-key shadowing."""
-    key = manifest.key or manifest.name
-    if key in TRUSTED_BUNDLED_POLICY_PLUGIN_KEYS and manifest.source != "bundled":
-        logger.warning(
-            "Ignoring non-bundled override for trusted policy plugin '%s'", key
-        )
-        return
-    winners[key] = manifest
-
 VALID_HOOKS: Set[str] = {
     "pre_tool_call",
     "post_tool_call",
@@ -4098,13 +4085,11 @@ class PluginManager:
     ) -> bool:
         """Unload registrations while excluding discovery/deferred loading."""
         with self._discovery_lock, _plugin_home_scope(self.home_path):
-            return self._unload_scoped(plugin, preserve_trusted=True)
+            return self._unload_scoped(plugin)
 
     def _unload_scoped(
         self,
         plugin: Union[str, PluginManifest, LoadedPlugin, None] = None,
-        *,
-        preserve_trusted: bool = False,
     ) -> bool:
         """Unload one plugin or all plugins owned by this manager.
 
@@ -4157,14 +4142,6 @@ class PluginManager:
                 for registration in self._ownership_ledger.get(key, [])
                 if registration.persistent and registration.active
             )
-
-        if preserve_trusted:
-            target_keys.difference_update(TRUSTED_BUNDLED_POLICY_PLUGIN_KEYS)
-            registrations = [
-                registration
-                for registration in registrations
-                if registration.plugin_key not in TRUSTED_BUNDLED_POLICY_PLUGIN_KEYS
-            ]
 
         found = bool(target_keys or registrations)
         self._dispose_registrations(registrations)
@@ -4304,7 +4281,7 @@ class PluginManager:
             if force:
                 # The ledger owns teardown.  Clearing manager-local containers by
                 # itself leaves process-global tools/platforms/providers installed.
-                self._unload_scoped()
+                self.unload()
             if env_var_enabled("HERMES_SAFE_MODE"):
                 logger.info("HERMES_SAFE_MODE=1 — plugin discovery skipped")
                 self._discovered = True
@@ -4435,7 +4412,7 @@ class PluginManager:
             )
         winners: Dict[str, PluginManifest] = {}
         for manifest in manifests:
-            _record_manifest_winner(winners, manifest)
+            winners[manifest.key or manifest.name] = manifest
         # Standalone/user plugins that pass the gates below are collected
         # here and loaded AFTER the sweep in dependency-respecting order
         # (requires_plugins topological sort, #64165).
@@ -4463,13 +4440,9 @@ class PluginManager:
                 )
                 continue
 
-            # Explicit disable normally wins. Trusted bundled policy plugins
-            # are host-owned enforcement and cannot be disabled by user/project
-            # configuration.
-            if (
-                lookup_key not in TRUSTED_BUNDLED_POLICY_PLUGIN_KEYS
-                and (lookup_key in disabled or manifest.name in disabled)
-            ):
+            # Explicit disable always wins (matches on key or on legacy
+            # bare name for back-compat with existing user configs).
+            if lookup_key in disabled or manifest.name in disabled:
                 loaded = LoadedPlugin(manifest=manifest, enabled=False)
                 loaded.error = "disabled via config"
                 self._plugins[lookup_key] = loaded

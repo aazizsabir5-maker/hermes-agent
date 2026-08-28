@@ -3122,26 +3122,6 @@ def _resolve_use_tui(args) -> bool:
         return False
 
 
-def _reject_required_policy_bypass(args, project_root) -> None:
-    """Refuse bypass flags when the project declares required policies."""
-    safe_mode = bool(getattr(args, "safe_mode", False))
-    ignore_rules = bool(getattr(args, "ignore_rules", False))
-    if not (safe_mode or ignore_rules):
-        return
-    from agent.finalization_policy import project_required_policy_ids
-
-    required = project_required_policy_ids(project_root)
-    if not required:
-        return
-    if safe_mode:
-        raise ValueError(
-            "enforced project cannot use --safe-mode while required policies are active"
-        )
-    raise ValueError(
-        "enforced project cannot use --ignore-rules while required policies are active"
-    )
-
-
 def cmd_chat(args):
     """Run interactive chat CLI."""
     use_tui = _resolve_use_tui(args)
@@ -3172,12 +3152,6 @@ def cmd_chat(args):
             print(f"Error: cannot enter --in directory {in_dir}: {e}")
             sys.exit(1)
         args.no_restore_cwd = True
-
-    try:
-        _reject_required_policy_bypass(args, os.getcwd())
-    except (ValueError, OSError) as exc:
-        print(f"Error: {exc}")
-        sys.exit(2)
 
     # --resume latest: keyword for "most recent session" — same resolution
     # as `-c` with no name (workspace-scoped MRU, then global fallback).

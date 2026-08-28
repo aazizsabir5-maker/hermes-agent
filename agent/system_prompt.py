@@ -185,9 +185,6 @@ def _plugin_session_info(agent: Any) -> Dict[str, str]:
         "platform": str(getattr(agent, "platform", None) or ""),
         "profile_name": profile_name,
         "cwd": cwd,
-        "active_finalization_policy_ids": ",".join(
-            getattr(agent, "_active_finalization_policy_ids", ()) or ()
-        ),
     }
 
 
