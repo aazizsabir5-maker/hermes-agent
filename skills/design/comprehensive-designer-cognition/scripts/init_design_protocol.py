@@ -1,55 +1,38 @@
 #!/usr/bin/env python3
-"""Initialize the mandatory design-completion protocol in a project.
-
-Existing files are never overwritten.
-"""
+"""Create the single design-decision ledger when it is absent."""
 
 from __future__ import annotations
 
-import shutil
-import sys
+import argparse
 from pathlib import Path
 
-TEMPLATE_MAP = {
-    "ORIGINAL-REQUEST.md": "ORIGINAL-REQUEST.md",
-    "DESIGN-BRIEF.md": "DESIGN-BRIEF.md",
-    "DECISION-MAP.md": "DECISION-MAP.md",
-    "DECISION-RECORDS.md": "DECISION-RECORDS.md",
-    "SYSTEM-SPEC.md": "SYSTEM-SPEC.md",
-    "DESIGN-AUDIT.md": "DESIGN-AUDIT.md",
-    "VALIDATION-REPORT.md": "VALIDATION-REPORT.md",
-    "DESIGN-COMPLETION.json": "DESIGN-COMPLETION.json",
-    "project.hermes.md": ".hermes.md",
-    "enforcement.json": ".hermes/enforcement.json",
-}
+
+LEDGER_NAME = "DESIGN-DECISIONS.md"
+TEMPLATE = Path(__file__).resolve().parent.parent / "templates" / LEDGER_NAME
 
 
-def main(argv: list[str]) -> int:
-    if len(argv) > 2:
-        print("usage: init_design_protocol.py [project-root]", file=sys.stderr)
-        return 2
-    root = (Path(argv[1]) if len(argv) == 2 else Path.cwd()).resolve()
-    if not root.exists() or not root.is_dir():
-        print(f"project root is not a directory: {root}", file=sys.stderr)
-        return 2
-    templates = Path(__file__).resolve().parent.parent / "templates"
-    created: list[str] = []
-    preserved: list[str] = []
-    for source_name, destination_name in TEMPLATE_MAP.items():
-        source = templates / source_name
-        destination = root / destination_name
-        if destination.exists():
-            preserved.append(destination_name)
-            continue
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, destination)
-        created.append(destination_name)
-    print("DESIGN PROTOCOL INITIALIZED")
-    print("created: " + (", ".join(created) if created else "none"))
-    print("preserved: " + (", ".join(preserved) if preserved else "none"))
-    print("Next: capture the original request, reconcile the boundary, replace all placeholders, and keep the evidence contract current.")
+def initialize(project_root: str | Path) -> tuple[Path, bool]:
+    root = Path(project_root).expanduser().resolve(strict=False)
+    root.mkdir(parents=True, exist_ok=True)
+    ledger = root / LEDGER_NAME
+    if ledger.exists() or ledger.is_symlink():
+        return ledger, False
+    ledger.write_text(TEMPLATE.read_text(encoding="utf-8"), encoding="utf-8")
+    return ledger, True
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("project_root", nargs="?", default=".")
+    args = parser.parse_args(argv)
+    ledger, created = initialize(args.project_root)
+    if created:
+        print(f"Created {ledger}")
+    else:
+        print(f"{ledger} already exists; left unchanged")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv))
+    raise SystemExit(main())
+
