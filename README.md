@@ -171,7 +171,9 @@ All documentation lives at **[hermes-agent.nousresearch.com/docs](https://hermes
 | [Configuration](https://hermes-agent.nousresearch.com/docs/user-guide/configuration)                | Config file, providers, models, all options                |
 | [Messaging Gateway](https://hermes-agent.nousresearch.com/docs/user-guide/messaging)                | Telegram, Discord, Slack, WhatsApp, Signal, Home Assistant |
 | [Security](https://hermes-agent.nousresearch.com/docs/user-guide/security)                          | Command approval, DM pairing, container isolation          |
-| [Fork: fail-closed design enforcement](docs/design-enforcement.md)                                   | Required finalization gate, reviewer lineage, operation    |
+| [Fork: decision-enforcement North Star](NORTH_STAR.md)                                             | Authoritative purpose, invariant, scope, and non-goals      |
+| [Fork: self-contained implementation context](docs/decision-enforcement/README.md)                  | Current state, correction plan, and fresh-session handoff   |
+| [Fork: legacy strict design enforcement](docs/design-enforcement.md)                                | Existing finalization architecture pending simplification  |
 | [Tools & Toolsets](https://hermes-agent.nousresearch.com/docs/user-guide/features/tools)            | 40+ tools, toolset system, terminal backends               |
 | [Skills System](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills)              | Procedural memory, Skills Hub, creating skills             |
 | [Memory](https://hermes-agent.nousresearch.com/docs/user-guide/features/memory)                     | Persistent memory, user profiles, best practices           |
