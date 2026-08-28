@@ -21,6 +21,9 @@ def test_design_protocol_bundle_contains_runtime_contract():
         "templates/enforcement.json",
     }
     assert {str(path.relative_to(SKILL)) for path in SKILL.rglob("*") if path.is_file()} >= required
+    skill_text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+    assert "trusted `design_review_request` tool" in skill_text
+    assert "does not satisfy a trusted runtime receipt requirement" in skill_text
 
 
 def test_design_protocol_bundle_is_machine_path_portable():
