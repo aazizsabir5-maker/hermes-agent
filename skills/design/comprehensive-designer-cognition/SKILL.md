@@ -325,213 +325,41 @@ Turn settled decisions into an artifact, specification, brief, prompt, prototype
 
 Examine operation over time: governance, maintenance, adaptation, incentives, failure recovery, and retirement.
 
-## Mandatory Design Completion Contract
+## Observable Completion Contract
 
-The protocol has two modes:
+Before Hermes may claim a substantial design is finished, every consequential in-scope decision must be traceable from intent to implementation and must record its alternatives, selected direction, tradeoff, evidence or assumption, downstream consequence, validation status, and reopening condition; unresolved consequential decisions must be disclosed as unresolved rather than silently treated as complete.
 
-- **Working mode** applies to exploration, a bounded critique, a small decision, or advice that does not claim a finished design. Keep reasoning proportionate, but label unresolved decisions and do not imply completion.
-- **Completion mode** is mandatory when producing or materially revising a design artifact, implementing a design, specifying a reusable system, working across three or more decision levels, or making any completion claim. In a repository or writable project, completion mode requires the files and validator below.
+For substantial design work in a writable project, maintain one `DESIGN-DECISIONS.md` ledger. Create it automatically when absent and never overwrite existing decision evidence. Use it as the live trace from boundary and intent through progressively expanded parent and child decisions to implementation and validation.
 
-The user may reduce scope or fidelity and may establish that a condition-dependent gate is genuinely not applicable. The non-waivable gates remain mandatory for every completion claim. Do not silently waive a gate. When evidence cannot be produced, report the work as provisional or blocked rather than complete.
+### Consequential decision records
 
-### Gate A — Decision boundary
+Record each consequential in-scope decision with these fields:
 
-Before implementation or high-fidelity production, state:
+- Level
+- Question
+- Criteria
+- Alternatives
+- Selection
+- Tradeoff
+- Evidence
+- Assumptions
+- Consequences
+- Validation
+- Reopen if
 
-- the design object;
-- decision levels in scope;
-- included surfaces, scenarios, actors, states, and repeated families;
-- intentional exclusions;
-- target fidelity;
-- a qualified definition of done for this commitment.
+Alternatives must be meaningfully distinct. When no credible alternative exists, say why rather than inventing one. Keep facts, evidence, assumptions, preferences, and commitments distinguishable. Expand the decision graph progressively: resolve high-leverage uncertainty before low-level detail, and record downstream consequences when an upstream selection changes.
 
-Completion condition: the boundary prevents a polished subset from masquerading as the whole design.
+Evidence should match consequence. Use proportionate supporting artifacts—such as a brief, system specification, prototype, audit, screenshot, or test result—when they materially test a decision. They remain supporting evidence, not mandatory ceremony. The ledger is the only mandatory project artifact.
 
-### Gate B — Progressive decision expansion
+Independent review is optional and should be chosen in proportion to risk, consequence, reversibility, public exposure, safety, expense, or an explicit user request. It does not require receipts, session choreography, hashes, or a prescribed backend stage.
 
-For every committed parent decision, identify generated children. Expand children that are consequential, repeated, risky, uncertain, highly coupled, difficult to reverse, or likely to require a reusable rule. Continue until another capable designer could execute the in-scope branch without inventing governing logic.
+### Completion language
 
-Do not jump from an adjective or broad direction directly to a polished artifact. Expand the intervening decisions about objective, content, structure, behavior, variation, context, exceptions, failure, and realization as applicable.
+A completion claim must name its fidelity and scope. Use claims such as **concept complete**, **system specified**, **high-fidelity artifact complete**, or **production implementation complete** only when the ledger structurally supports that exact claim. Production implementation status is not implied by a lower-fidelity result.
 
-Completion condition: every in-scope terminal commitment is either specified, validated, explicitly provisional, or recorded as a blocker.
+If consequential decisions remain unresolved, disclose their identifiers and say **provisional**, **partially specified**, **validation pending**, **blocked**, or **ready for the next iteration**. Continue working instead of silently treating unresolved decisions as complete.
 
-### Gate C — Consequential decision records
-
-Record every high-impact decision and every rule governing a repeated family. Each record must contain the question, criteria, at least two meaningful alternatives when alternatives exist, selection, tradeoffs, evidence versus assumptions, downstream consequences, validation method, and reopening condition.
-
-Completion condition: high-impact choices can be challenged and traced without reconstructing hidden reasoning.
-
-### Gate D — Repeated-system specification
-
-For every repeated family—components, interactions, messages, roles, service moments, spatial modules, images, controls, rules, recommendations, or other recurring elements—define the applicable construction grammar:
-
-- shared anatomy, behavior, or sequence;
-- dimensions, boundaries, tolerances, alignment, and spacing;
-- semantic roles and hierarchy;
-- allowed variation and prohibited treatments;
-- contextual or responsive transformation;
-- accessibility and inclusion behavior;
-- empty, loading, degraded, error, adversarial, and recovery behavior;
-- maintenance and extension rules.
-
-Mark non-applicable dimensions explicitly with a reason. A set of attractive or successful examples is not by itself a system.
-
-Completion condition: a new instance can be created without relying on undocumented taste.
-
-### Gate E — Novel-extension test
-
-Create at least one additional in-scope example, scenario, or instance using only the documented system rules. Record every point where improvisation was required. Any consequential improvisation means the system is under-specified and must be revised or remain provisional.
-
-Completion condition: the extension introduces no new governing rule, or each newly discovered rule has been incorporated and retested.
-
-### Gate F — Artifact and perceptual audit
-
-Inspect the actual artifact, not only its source or rationale. Select diagnostics appropriate to the medium. Examples include bounding boxes, baselines, optical centers, grayscale, silhouettes, small-size output, final context, physical tolerances, service walkthroughs, state traces, timing, stress conditions, and degraded operation.
-
-For repeated perceptual elements, compare visual or experiential weight, hierarchy, alignment, rhythm, and semantic consistency across siblings.
-
-Completion condition: `DESIGN-AUDIT.md` links each applicable diagnostic to evidence and findings.
-
-### Gate G — Context and transformation audit
-
-Test every major surface or experience under applicable changes in viewport, device, environment, input method, actor capability, data volume, localization, operating condition, and time. For responsive visual work, inspect hierarchy, crop, focal point, information preservation, collisions, line breaks, touch targets, reading order, component transformation, and movement between overlay and document flow.
-
-Completion condition: adaptation is art-directed or system-directed, not inferred from absence of overflow or catastrophic failure.
-
-### Gate H — Bottom-up critique
-
-Before completion, ask:
-
-- Which details contradict upstream intent or system rules?
-- Which siblings carry inconsistent weight or behavior?
-- Which repeated roles are treated differently without reason?
-- Which dimensions, timings, thresholds, or colors are arbitrary?
-- Which elements cannot be reproduced from documented rules?
-- Which polished details conceal unresolved decisions?
-- Which observed failures implicate an upstream decision?
-
-Completion condition: each finding is resolved, accepted as an explicit tradeoff, moved out of scope, or recorded as a blocker.
-
-### Gate I — Evidence-based completion language
-
-Never use **complete** without a qualifier. Allowed claims are:
-
-- **Concept complete** — intent, frame, and strategy are resolved for the stated scope.
-- **System specified** — reusable rules, variations, and states are documented for the stated scope.
-- **High-fidelity artifact complete** — the realized experience is finished and tested for the stated scope.
-- **Production implementation complete** — the real target, data, integrations, accessibility, safety, security, and operational paths work for the stated scope.
-
-Use **provisional**, **partially specified**, **validation pending**, **blocked**, or **ready for the next commitment** when the corresponding gate has not passed.
-
-### Gate J — Independent completion review
-
-The building agent must not certify its own substantial design as complete and must not author or alter the reviewer’s report or receipt. Before a completion claim:
-
-1. Capture the original request verbatim in `ORIGINAL-REQUEST.md` and reconcile the declared boundary against every requested deliverable. A scope reduction requires user evidence; unilateral narrowing is not approval.
-2. Finish all builder-owned artifacts and gates except independent review. Run deterministic validation far enough to resolve all pre-review structural errors.
-3. Compute the review subject hash with `validate_design_completion.py --subject-hash <project-root>`.
-4. When the trusted `design_review_request` tool is available, invoke it with the project root. Do **not** substitute a direct `delegate_task` call: the trusted tool creates the immutable snapshot, launches the separate reviewer, writes the reviewer-owned report and project receipt, and issues the additional runtime-bound receipt required by enforced finalization.
-5. Only in a standalone runtime where `design_review_request` is unavailable, use `delegate_task` to create a genuinely separate reviewer session, give it the required review material, and use `templates/INDEPENDENT-REVIEW-PROMPT.md` as its role contract. This fallback can satisfy the standalone validator but does not satisfy a trusted runtime receipt requirement.
-6. Resolve every blocking finding and obtain a fresh **pass**. A conditional pass is not a pass. Any material change to the request, manifest subject fields, or required artifacts invalidates the subject hash and receipt.
-
-The receipt binds the review to exact artifact hashes and detects stale review, but it does not cryptographically prove reviewer independence. If a separate reviewer or runtime provenance is unavailable, do not self-certify. Report `awaiting independent review`.
-
-### Gate K — Deterministic completion manifest
-
-For substantial work in a writable project, initialize the protocol before implementation or high-fidelity production:
-
-```text
-python "${HERMES_SKILL_DIR}/scripts/init_design_protocol.py" <project-root>
-```
-
-This creates the builder-owned artifacts and a root `.hermes.md` without overwriting existing files. It deliberately does not create the reviewer-owned report or receipt. Capture the original request before interpreting its boundary, then maintain `DESIGN-COMPLETION.json` from `templates/DESIGN-COMPLETION.json`.
-
-Every applicable gate must be `pass` with **structured evidence references**. Each evidence item must resolve uniquely to an existing textual project file and use exactly one locator: a unique structural Markdown section heading, a structured evidence ID matching `PREFIX-###`, or a strict RFC 6901 JSON Pointer for JSON evidence. Markdown parsing ignores fenced examples and consistently supports CommonMark ATX headings, including optional closing hashes. Evidence IDs must resolve exactly once as a Markdown anchor, table row, list item, HTML ID, or delimited token—not an arbitrary substring or prefix of a longer identifier. All JSON inputs reject duplicate object members, non-standard or non-finite numeric values, lone Unicode surrogates, excessive nesting, and ambiguous pointers. Binary evidence must be attached through a textual evidence index that records and matches its SHA-256 digest; a binary file cannot validate its own invented section or ID. The decision-boundary, progressive-expansion, consequential-records, artifact-audit, bottom-up-critique, automated-validation, and independent-review gates are non-waivable. Repeated-system and novel-extension gates may be `not_applicable` only when the manifest declares no repeated families; context-transformation may be `not_applicable` only when the manifest declares no transformations. Every exemption requires a concrete reason.
-
-The validator also requires canonically distinct artifact files, exactly one structural occurrence of every mandatory artifact section outside fenced code, unique decision-node and record identifiers, exactly one node ID and at most one terminal record reference per map line, a status and valid record link for every committed or validated node, complete and non-duplicated decision-record fields outside fenced examples, an original-request hash, a separate reviewer-produced report whose structural subject, session, disposition, blocker section, and headings match its freshness receipt, and a receipt bound to every required artifact plus every textual evidence file and binary attachment cited by any pre-review gate. `fail`, `not_run`, `provisional`, missing evidence, stale review, unresolved blockers, or absent artifacts prohibit completion.
-
-Run the completion gate:
-
-```text
-python "${HERMES_SKILL_DIR}/scripts/validate_design_completion.py" <project-root>
-```
-
-Treat a nonzero exit as a hard completion blocker. Do not edit the manifest merely to satisfy the validator; its values must point to real evidence.
-
-### Anti-self-certification rule
-
-Source files existing, an artifact rendering, tests passing, no visible overflow, general aesthetic coherence, or the builder's own approval are insufficient. A completion claim requires all applicable gates, required artifacts, deterministic validation, direct artifact inspection, extension tests for repeated systems, independent review, and zero unresolved blockers.
-
-## Required Working Artifacts
-
-For completion-mode work in a writable project, create and maintain all of these builder-owned files:
-
-- `ORIGINAL-REQUEST.md`
-- `DESIGN-BRIEF.md`
-- `DECISION-MAP.md`
-- `DECISION-RECORDS.md`
-- `SYSTEM-SPEC.md`
-- `DESIGN-AUDIT.md`
-- `VALIDATION-REPORT.md`
-- `DESIGN-COMPLETION.json`
-
-A separate delegated reviewer owns:
-
-- `INDEPENDENT-REVIEW.md`
-- `REVIEW-RECEIPT.json`
-
-The builder must not modify reviewer-owned files. Start from the files under `templates/`. These artifacts are part of the design, not retrospective paperwork. Update builder-owned artifacts as decisions change; any material change after review requires a new review. For working-mode conversation without a project, present the corresponding information inline and never claim completion.
-
-### Design Brief
-
-- Situation
-- Intended effect
-- People and systems affected
-- Scope and non-goals
-- Constraints
-- Success and failure criteria
-- Known evidence
-- Explicit assumptions
-- Open questions
-
-### Decision Map
-
-Represent live decisions as an indented tree or compact graph under one structural `## Decision tree` section; do not place the live tree in a fenced example. Mark dependencies, status, consequence, reversibility, and uncertainty. Expand only the active frontier.
-
-### Decision Record
-
-For completion-mode project files, use this validator-compatible structure exactly; duplicate it for each `DR-###` record:
-
-```markdown
-## DR-001 — Decision name
-
-- **Level:**
-- **Status:** open | provisional | committed | validated | reopened | blocked | out-of-scope
-- **Question:**
-- **Affected people or systems:**
-- **Criteria:**
-- **Alternative A:**
-- **Alternative B:**
-- **Selection:**
-- **Tradeoffs and failure modes:**
-- **Evidence:**
-- **Assumptions:**
-- **Downstream consequences:**
-- **Consequence if wrong:**
-- **Reversibility:**
-- **Uncertainty:**
-- **Validation method and result:**
-- **Reopen if:**
-```
-
-### Coherence Check
-
-- Does the whole express one intelligible governing logic?
-- Can each major feature be traced to an intended effect?
-- Do any local optimizations undermine the system?
-- Are similar situations handled similarly unless difference is intentional?
-- Does the perceptible form tell the truth about behavior and structure?
-- Are omissions and exclusions deliberate?
+The deterministic ledger validator checks only observable structure. It does not judge private cognition, objective design quality, the truth of evidence, reviewer intelligence, production readiness, or tamper-proof delivery.
 
 ## Communication Rules
 
@@ -604,4 +432,4 @@ Before presenting a design result, verify:
 - The output matches the user's requested fidelity and form.
 - Open decisions and reopening conditions are preserved.
 
-In working mode, a result is **ready for the next commitment** when it has clear rationale, proportionate evidence, and no known contradiction hidden by presentation quality. In completion mode, use a qualified completion claim only after every applicable mandatory gate passes, the deterministic validator exits successfully, and an independent reviewer returns a fresh pass with zero blockers.
+A result is **ready for the next commitment** when it has clear rationale, proportionate evidence, and no known contradiction hidden by presentation quality. Use a fidelity-qualified completion claim only when the observable decision contract supports it; otherwise disclose unresolved consequential decisions and continue.
