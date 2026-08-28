@@ -6601,12 +6601,16 @@ def run_job(
                 repair_explicit_computer_use_media_paths,
             )
 
-            final_response = repair_explicit_computer_use_media_paths(
-                final_response,
-                result.get("messages", []),
-            )
+            if not result.get("finalization"):
+                final_response = repair_explicit_computer_use_media_paths(
+                    final_response,
+                    result.get("messages", []),
+                )
         # Strip leaked placeholder text that upstream may inject on empty completions.
-        if final_response.strip() == "(No response generated)":
+        if (
+            not result.get("finalization")
+            and final_response.strip() == "(No response generated)"
+        ):
             final_response = ""
         # Cron silence on abnormal empty turns.  The turn-completion explainer
         # (#34452) replaces a blank/empty model turn with a "⚠️ No reply: …"
@@ -6617,7 +6621,11 @@ def run_job(
         # produced it) and treat it as empty so the empty-response suppression
         # and soft-failure marking below apply — restoring pre-#34452 silence
         # for scheduled jobs without disabling the explainer everywhere.
-        if final_response.strip() and turn_exit_reason:
+        if (
+            not result.get("finalization")
+            and final_response.strip()
+            and turn_exit_reason
+        ):
             # The formatter's wording varies by persistence cause (locked /
             # disk / unknown), so render every variant — matching only the
             # one-argument render would let cause-refined explainer text slip

@@ -12,7 +12,10 @@ import pytest
 
 pytest.importorskip("aiohttp")
 
-from gateway.platforms.api_server import _resolve_media_to_data_urls  # noqa: E402
+from gateway.platforms.api_server import (  # noqa: E402
+    _resolve_media_to_data_urls,
+    _resolve_result_media,
+)
 
 # 1x1 transparent PNG
 _PNG_BYTES = base64.b64decode(
@@ -41,6 +44,18 @@ class TestResolveMediaToDataUrls(unittest.TestCase):
         p = self._write_png()
         out = _resolve_media_to_data_urls(f"See `MEDIA:{p}` above")
         self.assertIn("data:image/png;base64,", out)
+
+    def test_gated_result_preserves_exact_text(self):
+        candidate = "exact gated bytes MEDIA:/tmp/shot.png"
+        self.assertEqual(
+            _resolve_result_media(
+                {
+                    "final_response": candidate,
+                    "finalization": {"status": "allowed"},
+                }
+            ),
+            candidate,
+        )
 
     def test_missing_file_left_untouched(self):
         text = "MEDIA:/nonexistent/path/shot.png"

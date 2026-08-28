@@ -6553,7 +6553,7 @@ class TurnRunner:
         # model-mangled path and a rejected attachment.
         if isinstance(result, dict):
             _result_final = result.get("final_response")
-            if isinstance(_result_final, str):
+            if isinstance(_result_final, str) and not result.get("finalization"):
                 result["final_response"] = repair_explicit_computer_use_media_paths(
                     _result_final,
                     result.get("messages", []),
@@ -6778,7 +6778,7 @@ class TurnRunner:
         # also the sole guard on the fallback branch taken when mid-run
         # context compression shrinks the message list below the original
         # history length, preserving the compression-safe behaviour of #160.
-        if "MEDIA:" not in final_response:
+        if not result.get("finalization") and "MEDIA:" not in final_response:
             media_tags, has_voice_directive = _collect_auto_append_media_tags(
                 result.get("messages", []),
                 history_offset=len(agent_history),
@@ -6840,6 +6840,7 @@ class TurnRunner:
             "session_id": effective_session_id,
             "response_previewed": result.get("response_previewed", False),
             "response_transformed": result.get("response_transformed", False),
+            "finalization": result.get("finalization"),
             # Pass through the agent_persisted flag so the persistence block
             # above can correctly determine whether the codex app-server path
             # self-persisted (it didn't — see codex_runtime.py).  Default
@@ -23258,7 +23259,7 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
             # Background tasks start a fresh conversation (no prior history),
             # so history_offset=0: every message in the run belongs to this
             # turn. Mirrors the repair on the main turn path.
-            if response:
+            if response and not (result or {}).get("finalization"):
                 response = repair_explicit_computer_use_media_paths(
                     response,
                     result.get("messages", []),
@@ -28334,6 +28335,76 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
         agent runs on the host with full access to local files, memory,
         skills, and a unified session store.
         """
+        # A remote proxy can stream candidate text before this process can run
+        # its trusted finalization gate. If any local required policy applies to
+        # this conversation, refuse proxy execution rather than fail open.
+        try:
+            from agent.finalization_policy import (
+                policy_buffers_turn,
+                project_required_policy_ids,
+            )
+            from agent.runtime_cwd import resolve_context_cwd
+            from hermes_cli.plugins import get_plugin_manager
+
+            project_root = resolve_context_cwd() or os.getcwd()
+            policies = [
+                policy
+                for policy in get_plugin_manager().iter_finalization_policies()
+                if policy.required
+            ]
+            required_ids = set(project_required_policy_ids(project_root))
+            candidate_messages = [message] + [
+                item.get("content")
+                for item in reversed(history[-20:])
+                if isinstance(item, dict) and item.get("role") == "user"
+            ]
+            applicable_ids = set(required_ids)
+            for policy in policies:
+                if policy.id in applicable_ids:
+                    continue
+                for candidate_message in candidate_messages:
+                    applies, predicate_error = policy_buffers_turn(
+                        policy, str(project_root), candidate_message
+                    )
+                    if applies or predicate_error:
+                        applicable_ids.add(policy.id)
+                        break
+            if applicable_ids:
+                return {
+                    "final_response": (
+                        "Final delivery blocked by the host runtime: required "
+                        "finalization policies cannot be trusted through gateway proxy mode."
+                    ),
+                    "messages": [],
+                    "api_calls": 0,
+                    "tools": [],
+                    "completed": False,
+                    "failed": True,
+                    "finalization": {
+                        "status": "blocked",
+                        "reason_code": "untrusted_remote_execution",
+                        "policies": sorted(applicable_ids),
+                    },
+                }
+        except Exception:
+            # Discovery/configuration failures at this boundary are themselves
+            # unsafe: the proxy must not receive candidate-generating requests.
+            return {
+                "final_response": (
+                    "Final delivery blocked by the host runtime: required "
+                    "finalization policy state could not be established."
+                ),
+                "messages": [],
+                "api_calls": 0,
+                "tools": [],
+                "completed": False,
+                "failed": True,
+                "finalization": {
+                    "status": "blocked",
+                    "reason_code": "policy_state_unavailable",
+                },
+            }
+
         try:
             from aiohttp import ClientSession as _AioClientSession, ClientTimeout
         except ImportError:
