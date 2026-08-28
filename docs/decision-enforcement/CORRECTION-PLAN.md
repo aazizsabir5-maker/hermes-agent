@@ -1,6 +1,6 @@
 # Lean Decision-Philosophy Enforcement Correction Plan
 
-> **For Hermes:** Use subagent-driven-development skill to implement this plan task-by-task.
+> **Execution discipline:** Follow this plan task-by-task with strict TDD. Delegate independent implementation and review tasks when useful, but do not depend on any untracked skill or external chat context.
 
 **Goal:** Reduce the maintained fork from a multi-stage completion/provenance system to one simple, observable guarantee: substantial design work launched through `hermes 1` must follow the comprehensive hierarchical decision-making philosophy, and Hermes must not claim the work is done until a small decision contract is satisfied.
 
@@ -160,10 +160,11 @@ git commit -m "test: define lean decision enforcement contract"
 
 **Files:**
 - Modify: `skills/design/comprehensive-designer-cognition/SKILL.md`
-- Modify: `/Users/ariansabir/.hermes/profiles/decision/skills/design/comprehensive-designer-cognition/SKILL.md` only after the bundled version passes review
 - Create: `skills/design/comprehensive-designer-cognition/templates/DESIGN-DECISIONS.md`
 - Delete after migration: the mandatory completion templates listed in Task 7
 - Test: `tests/skills/test_comprehensive_designer_cognition_bundle.py`
+
+The tracked bundled skill is the source of truth. Do not hand-edit a profile-local skill copy; after merge, use the tracked installer/synchronization path to update the active profile and verify that the installed copy matches the repository.
 
 **Step 1: Write failing skill assertions**
 
