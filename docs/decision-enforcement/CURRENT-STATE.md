@@ -252,4 +252,4 @@ Before implementation, confirm this tradeoff:
 
 > Choose simple, observable enforcement of comprehensive design decisions over strict process-local reviewer provenance and universal response-release security.
 
-The user requested this simplification direction. The implementation plan still requires explicit execution approval, TDD, independent review, and a complexity-budget report before merge.
+The user requested this simplification direction and a self-contained review/correction package. The specific lean architecture remains a proposal until the implementation approval checkpoint in `CORRECTION-PLAN.md` is accepted. Any implementation still requires explicit execution approval, TDD, independent review, and a complexity-budget report before merge.

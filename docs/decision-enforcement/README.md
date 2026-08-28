@@ -5,7 +5,7 @@ This directory makes the fork self-contained for future contributors and fresh A
 ## Read in this order
 
 1. [`../../NORTH_STAR.md`](../../NORTH_STAR.md) — authoritative purpose, product promise, single enforceable rule, scope, non-goals, and change test.
-2. [`PRODUCT-DECISIONS.md`](PRODUCT-DECISIONS.md) — committed product decisions and explicit reopening conditions.
+2. [`PRODUCT-DECISIONS.md`](PRODUCT-DECISIONS.md) — user-confirmed direction, proposed corrections, and explicit reopening conditions.
 3. [`CURRENT-STATE.md`](CURRENT-STATE.md) — what exists today, why it became excessive, current launcher behavior, known operational failures, and repository architecture.
 4. [`CORRECTION-PLAN.md`](CORRECTION-PLAN.md) — task-by-task TDD plan for simplifying the fork.
 5. [`HANDOFF.md`](HANDOFF.md) — copy-paste context for a fresh chat or implementation agent.

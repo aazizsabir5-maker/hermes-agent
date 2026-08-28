@@ -1,6 +1,12 @@
 # Product Decision Record
 
-These decisions govern the correction unless the user explicitly reopens them. They are product decisions, not descriptions of the current strict implementation.
+These entries separate user-confirmed direction from recommended corrections that still require implementation approval. They are product decisions and proposals, not descriptions of the current strict implementation.
+
+- **committed** — directly established by the user or required for an honest claim boundary;
+- **proposed** — recommended by the review and correction plan but not authorization to implement;
+- **implemented** — reserved for behavior merged and verified in the corrected fork.
+
+No entry in this document authorizes code changes by itself. Follow the approval checkpoint in `CORRECTION-PLAN.md`.
 
 ## P-001 — Optimize for decision discipline, not provenance infrastructure
 
@@ -33,7 +39,7 @@ These decisions govern the correction unless the user explicitly reopens them. T
 
 ## P-004 — Use one universal project artifact
 
-- **Status:** committed
+- **Status:** proposed
 - **Question:** What evidence should every substantial writable-project design maintain?
 - **Selection:** One `DESIGN-DECISIONS.md` ledger.
 - **Rejected default:** Eight builder documents plus reviewer report and receipt.
@@ -43,7 +49,7 @@ These decisions govern the correction unless the user explicitly reopens them. T
 
 ## P-005 — Keep independent review proportional
 
-- **Status:** committed
+- **Status:** proposed
 - **Question:** Must every substantial design obtain a runtime-trusted independent review?
 - **Selection:** No. Review is optional or risk-triggered.
 - **Use review when:** Work is high-risk, expensive, public, difficult to reverse, safety-relevant, or explicitly requested.
@@ -53,7 +59,7 @@ These decisions govern the correction unless the user explicitly reopens them. T
 
 ## P-006 — Gate completion claims, not ordinary exploration
 
-- **Status:** committed
+- **Status:** proposed
 - **Question:** When should runtime enforcement block output?
 - **Selection:** Only when Hermes attempts to claim that substantial design work is finished.
 - **Rejected default:** Buffering or restricting all applicable design turns and delivery surfaces.
@@ -81,7 +87,7 @@ These decisions govern the correction unless the user explicitly reopens them. T
 
 ## P-009 — Provide one-way migration, not permanent dual modes
 
-- **Status:** committed
+- **Status:** proposed
 - **Question:** How should existing strict-protocol projects transition?
 - **Selection:** A tested one-way migration to `DESIGN-DECISIONS.md`.
 - **Rejected default:** Maintaining strict and lean protocols indefinitely.
