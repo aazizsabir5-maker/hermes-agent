@@ -117,6 +117,13 @@ hermes update       # Update to the latest version
 hermes doctor       # Diagnose any issues
 ```
 
+### Enforced design decisions
+
+For substantial design work, `cd` into the project and run `hermes 1`. Describe
+the task normally, then say “Finish this project” when ready. Hermes maintains
+one decision ledger and will not claim completion while consequential decisions
+remain unresolved or untraceable. See [Enforced design decisions](docs/design-enforcement.md).
+
 📖 **[Full documentation →](https://hermes-agent.nousresearch.com/docs/)**
 
 ---
@@ -171,9 +178,8 @@ All documentation lives at **[hermes-agent.nousresearch.com/docs](https://hermes
 | [Configuration](https://hermes-agent.nousresearch.com/docs/user-guide/configuration)                | Config file, providers, models, all options                |
 | [Messaging Gateway](https://hermes-agent.nousresearch.com/docs/user-guide/messaging)                | Telegram, Discord, Slack, WhatsApp, Signal, Home Assistant |
 | [Security](https://hermes-agent.nousresearch.com/docs/user-guide/security)                          | Command approval, DM pairing, container isolation          |
-| [Fork: decision-enforcement North Star](NORTH_STAR.md)                                             | Authoritative purpose, invariant, scope, and non-goals      |
-| [Fork: self-contained implementation context](docs/decision-enforcement/README.md)                  | Current state, correction plan, and fresh-session handoff   |
-| [Fork: legacy strict design enforcement](docs/design-enforcement.md)                                | Existing finalization architecture pending simplification  |
+| [Enforced design decisions](docs/design-enforcement.md)                                            | One-command design workflow and developer contract          |
+| [Decision-enforcement North Star](NORTH_STAR.md)                                                    | Authoritative purpose, invariant, scope, and non-goals      |
 | [Tools & Toolsets](https://hermes-agent.nousresearch.com/docs/user-guide/features/tools)            | 40+ tools, toolset system, terminal backends               |
 | [Skills System](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills)              | Procedural memory, Skills Hub, creating skills             |
 | [Memory](https://hermes-agent.nousresearch.com/docs/user-guide/features/memory)                     | Persistent memory, user profiles, best practices           |

@@ -23,3 +23,15 @@ records observable decision evidence, and gates its own completion claim. It
 does not prove private cognition, objective design quality, evidence truth,
 reviewer independence, production readiness, or tamper-proof delivery across
 every Hermes surface.
+
+### Migrating an older project
+
+Run the one-way converter once:
+
+```bash
+python skills/design/comprehensive-designer-cognition/scripts/migrate_to_decision_ledger.py /path/to/project
+```
+
+It reads the old brief, decision map, records, and completion fidelity into a
+new `DESIGN-DECISIONS.md`. It leaves the old files untouched. Review the new
+ledger before archiving those legacy files; new work uses only the ledger.

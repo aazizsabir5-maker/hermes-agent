@@ -211,10 +211,7 @@ The correction is successful when:
 For this fork’s decision-enforcement work, use this precedence:
 
 1. This North Star.
-2. `docs/decision-enforcement/PRODUCT-DECISIONS.md`.
-3. `docs/decision-enforcement/CORRECTION-PLAN.md`.
-4. `docs/decision-enforcement/CURRENT-STATE.md`.
-5. The bundled `comprehensive-designer-cognition` skill.
-6. Existing strict-enforcement implementation and historical documentation.
+2. `docs/design-enforcement.md` for the user and developer contract.
+3. The bundled `comprehensive-designer-cognition` skill.
 
-When existing code or documentation conflicts with this North Star, treat the conflict as correction work—not as a reason to preserve the old behavior.
+Historical strict-enforcement plans are not an active compatibility contract.

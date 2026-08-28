@@ -111,3 +111,26 @@ def test_policy_prompt_has_no_user_managed_lifecycle(monkeypatch):
         "immutable snapshot",
     ):
         assert forbidden not in prompt
+
+
+def test_user_documentation_teaches_one_command_and_no_legacy_stages():
+    guide = (ROOT / "docs" / "design-enforcement.md").read_text(encoding="utf-8")
+    user_section = guide.split("## Developer", 1)[0]
+    assert "Run `hermes 1`." in user_section
+    assert "Describe the design task normally." in user_section
+    assert "Finish this project" in user_section
+    for forbidden in (
+        "mode",
+        "receipt",
+        "snapshot",
+        "reviewer session",
+        "audit log",
+        "release hash",
+    ):
+        assert forbidden not in user_section.lower()
+
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "Enforced design decisions" in readme
+    assert "hermes 1" in readme
+    assert "legacy strict design enforcement" not in readme.lower()
+    assert not (ROOT / "docs" / "examples" / "design-enforcement.json").exists()
