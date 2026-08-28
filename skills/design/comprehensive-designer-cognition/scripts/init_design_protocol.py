@@ -20,6 +20,7 @@ TEMPLATE_MAP = {
     "VALIDATION-REPORT.md": "VALIDATION-REPORT.md",
     "DESIGN-COMPLETION.json": "DESIGN-COMPLETION.json",
     "project.hermes.md": ".hermes.md",
+    "enforcement.json": ".hermes/enforcement.json",
 }
 
 
@@ -40,6 +41,7 @@ def main(argv: list[str]) -> int:
         if destination.exists():
             preserved.append(destination_name)
             continue
+        destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, destination)
         created.append(destination_name)
     print("DESIGN PROTOCOL INITIALIZED")

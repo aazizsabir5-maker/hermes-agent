@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "required_policies": ["design-completion"],
+  "design": {
+    "applicable": true,
+    "mode": "working"
+  }
+}
