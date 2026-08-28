@@ -584,14 +584,25 @@ def build_turn_context(
         from agent.runtime_cwd import resolve_context_cwd
         from hermes_cli.plugins import get_plugin_manager
 
-        registered_policies = get_plugin_manager().iter_finalization_policies()
+        trusted_readonly_review = bool(
+            getattr(agent, "_trusted_readonly_review_session", False)
+        )
+        registered_policies = (
+            ()
+            if trusted_readonly_review
+            else get_plugin_manager().iter_finalization_policies()
+        )
         registered_ids = {policy.id for policy in registered_policies}
         project_root = (
             resolve_context_cwd()
             or getattr(agent, "working_directory", None)
             or os.getcwd()
         )
-        required_ids = project_required_policy_ids(project_root) if project_root else ()
+        required_ids = (
+            ()
+            if trusted_readonly_review
+            else project_required_policy_ids(project_root) if project_root else ()
+        )
         agent._turn_project_required_policy_ids = tuple(required_ids)
         missing_ids = sorted(set(required_ids) - registered_ids)
         startup_error = (
@@ -599,7 +610,11 @@ def build_turn_context(
             if missing_ids
             else None
         )
-        active_ids = set(getattr(agent, "_active_finalization_policy_ids", ()) or ())
+        active_ids = (
+            set()
+            if trusted_readonly_review
+            else set(getattr(agent, "_active_finalization_policy_ids", ()) or ())
+        )
         active_ids.update(required_ids)
         for policy in registered_policies:
             predicate = getattr(policy, "turn_predicate", None)

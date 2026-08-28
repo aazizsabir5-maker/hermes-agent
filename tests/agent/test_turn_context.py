@@ -210,6 +210,25 @@ def test_returns_turn_context_with_user_message_appended():
     assert ctx.active_system_prompt == "SYSTEM"
 
 
+def test_trusted_readonly_reviewer_does_not_reenter_finalization_policy():
+    agent = _FakeAgent()
+    agent._trusted_readonly_review_session = True
+    agent._active_finalization_policy_ids = ("design-completion",)
+    policy = types.SimpleNamespace(
+        id="design-completion",
+        required=True,
+        turn_predicate=lambda _root, _message: True,
+    )
+    manager = types.SimpleNamespace(iter_finalization_policies=lambda: (policy,))
+
+    with patch("hermes_cli.plugins.get_plugin_manager", return_value=manager):
+        _build(agent, user_message="Independently review this completed design")
+
+    assert agent._active_finalization_policy_ids == ()
+    assert agent._turn_project_required_policy_ids == ()
+    assert agent._finalization_buffering_required is False
+
+
 def test_user_message_preserves_platform_event_timestamp():
     agent = _FakeAgent()
 
