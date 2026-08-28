@@ -172,3 +172,16 @@ def test_generic_explanation_does_not_create_design_paperwork(tmp_path, user_tex
     policy = _policy(tmp_path)
     assert policy.applies_to_turn(tmp_path, user_text) is False
     assert not (tmp_path / "DESIGN-DECISIONS.md").exists()
+
+
+@pytest.mark.parametrize(
+    "user_text",
+    (
+        "How do we design a safer checkout?",
+        "What is the best way to prototype this service?",
+    ),
+)
+def test_question_form_design_requests_still_activate_enforcement(tmp_path, user_text):
+    policy = _policy(tmp_path)
+    assert policy.applies_to_turn(tmp_path, user_text) is True
+    assert (tmp_path / "DESIGN-DECISIONS.md").is_file()

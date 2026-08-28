@@ -48,6 +48,16 @@ _DECISION_FIELDS = (
     "Reopen if",
 )
 _COMPLETION_FIELDS = ("Fidelity", "Supported claim", "Known limitations")
+_ALLOWED_MAP_STATUSES = {
+    "context",
+    "open",
+    "provisional",
+    "committed",
+    "validated",
+    "reopened",
+    "blocked",
+    "out-of-scope",
+}
 
 
 @dataclass(frozen=True)
@@ -180,7 +190,11 @@ def validate_project(project_root: str | Path) -> ValidationResult:
         if "→" not in relationship and "->" not in relationship:
             diagnostics.append(f"{decision_id} must trace a parent → child relationship")
         normalized_status = status.strip().lower()
-        if normalized_status in {"committed", "validated"}:
+        if normalized_status not in _ALLOWED_MAP_STATUSES:
+            diagnostics.append(
+                f"{decision_id} has unsupported decision-map status: {status.strip()}"
+            )
+        elif normalized_status in {"committed", "validated"}:
             committed_ids.add(decision_id)
         elif normalized_status in {"open", "provisional", "reopened", "blocked"}:
             unresolved_status_ids.add(decision_id)

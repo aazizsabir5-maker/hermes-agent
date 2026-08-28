@@ -190,6 +190,20 @@ def test_open_map_status_must_be_disclosed_and_short_fidelity_must_qualify_claim
     assert "fidelity" in "\n".join(result.diagnostics).lower()
 
 
+def test_unknown_decision_map_status_is_rejected(tmp_path):
+    validator = _load_validator()
+    unknown = _valid_ledger().replace(
+        "- D-001 [context] situation → intent",
+        "- D-001 [pending] situation → intent",
+    )
+    _write(tmp_path, unknown)
+    result = validator.validate_project(tmp_path)
+    assert result.passed is False
+    joined = "\n".join(result.diagnostics)
+    assert "D-001" in joined
+    assert "status" in joined.lower()
+
+
 def test_missing_ledger_and_malformed_utf8_fail_cleanly(tmp_path):
     validator = _load_validator()
     missing = validator.validate_project(tmp_path)

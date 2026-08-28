@@ -33,6 +33,12 @@ _EXPLANATORY_RE = re.compile(
     r"tell\s+me\s+about|why\s+(?:is|are|does|do))\b",
     re.IGNORECASE,
 )
+_QUESTION_DESIGN_INTENT_RE = re.compile(
+    r"^\s*(?:how\s+do\s+(?:we|i|you)|what\s+is\s+(?:the\s+)?"
+    r"(?:best|right|safest|simplest)\s+way\s+to)\b.{0,80}\b"
+    r"(?:design|redesign|architect|prototype)\b",
+    re.IGNORECASE,
+)
 _BUILD_DESIGN_RE = re.compile(
     r"\b(build|create|develop|make|plan|revamp|shape)\b.{0,80}\b("
     r"service|interaction|workflow|policy|product|organization|space|identity|"
@@ -77,7 +83,7 @@ def _enabled(value: bool | Callable[[], bool]) -> bool:
 
 
 def _is_design_request(text: str) -> bool:
-    if _EXPLANATORY_RE.search(text):
+    if _EXPLANATORY_RE.search(text) and not _QUESTION_DESIGN_INTENT_RE.search(text):
         return False
     return bool(_EXPLICIT_DESIGN_RE.search(text) or _BUILD_DESIGN_RE.search(text))
 
