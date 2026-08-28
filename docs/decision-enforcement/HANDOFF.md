@@ -155,10 +155,12 @@ The final implementation must demonstrate:
 7. A missing, out-of-root, or nonexistent local artifact reference blocks completion; structural reference validation does not claim semantic correctness.
 8. An unresolved in-scope consequential decision blocks even an otherwise valid fidelity-qualified completion claim, and every unresolved decision ID is surfaced directly.
 9. Provisional or “ready for next commitment” language remains allowed.
-10. A structurally valid ledger with fidelity-appropriate realization references allows a fidelity-qualified completion statement.
-11. Restarting Hermes does not invalidate the ledger or require review-session choreography.
-12. Plain `hermes` is unaffected.
-13. Existing strict-protocol projects can migrate once without invented content or silent data loss.
+10. An otherwise valid completion claim missing its fidelity is blocked with a fidelity-specific diagnostic.
+11. An otherwise valid completion claim missing its stated scope is blocked with a scope-specific diagnostic.
+12. A structurally valid ledger with fidelity-appropriate realization references allows a scope- and fidelity-qualified completion statement.
+13. Restarting Hermes does not invalidate the ledger or require review-session choreography.
+14. Plain `hermes` is unaffected.
+15. Existing strict-protocol projects can migrate once without invented content or silent data loss.
 
 ## Complexity budget
 

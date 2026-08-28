@@ -285,6 +285,8 @@ Require controlled failure for:
 - missing validation status;
 - missing reopening condition;
 - unresolved in-scope consequential decision combined with an otherwise structurally valid, fidelity-qualified completion claim; require diagnostics to identify each unresolved decision ID rather than returning only a generic block;
+- otherwise valid ledger and completion claim with no stated fidelity; require a diagnostic that identifies the missing fidelity clause;
+- otherwise valid ledger and completion claim with no stated scope; require a diagnostic that identifies the missing scope clause;
 - malformed UTF-8 or malformed structure.
 
 **Step 3: Verify RED**
