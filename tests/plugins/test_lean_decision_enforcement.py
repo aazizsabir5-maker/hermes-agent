@@ -22,7 +22,13 @@ def _context(root, *, user="Design a checkout flow", response="A working directi
     )
 
 
-def _validation(*, passed: bool, reason: str = "ledger_valid", diagnostics=()):
+def _validation(
+    *,
+    passed: bool,
+    reason: str = "ledger_valid",
+    diagnostics=(),
+    supported_claim="Prototype-fidelity design complete for cart through confirmation",
+):
     return SimpleNamespace(
         passed=passed,
         reason_code=reason,
@@ -30,6 +36,7 @@ def _validation(*, passed: bool, reason: str = "ledger_valid", diagnostics=()):
         stdout="\n".join(diagnostics),
         stderr="",
         diagnostics=tuple(diagnostics),
+        supported_claim=supported_claim if passed else "",
     )
 
 
@@ -112,12 +119,42 @@ def test_completion_claim_lists_unresolved_decision_ids(tmp_path):
 def test_completion_claim_with_valid_ledger_is_allowed_without_ceremony(tmp_path):
     policy = _policy(tmp_path, _validation(passed=True))
     decision = policy.evaluate(
-        _context(tmp_path, response="At prototype fidelity, the design is complete.")
+        _context(
+            tmp_path,
+            response="Prototype-fidelity design complete for cart through confirmation.",
+        )
     )
     assert decision.action is FinalizationAction.ALLOW
     assert decision.reason_code == "decision_ledger_valid"
     assert not (tmp_path / "REVIEW-RECEIPT.json").exists()
     assert not (tmp_path / "INDEPENDENT-REVIEW.md").exists()
+
+
+def test_valid_ledger_does_not_release_unqualified_candidate_claim(tmp_path):
+    policy = _policy(tmp_path, _validation(passed=True))
+    decision = policy.evaluate(_context(tmp_path, response="The design is complete."))
+    assert decision.action is FinalizationAction.BLOCK
+    assert decision.reason_code == "candidate_claim_unqualified"
+    assert "supported claim" in decision.user_message.lower()
+
+
+def test_provisional_phrase_cannot_negate_an_affirmative_completion_claim(tmp_path):
+    policy = _policy(
+        tmp_path,
+        _validation(
+            passed=False,
+            reason="unresolved_decisions",
+            diagnostics=("Unresolved consequential decisions: D-013",),
+        ),
+    )
+    decision = policy.evaluate(
+        _context(
+            tmp_path,
+            response="The design is complete, although one detail is provisional.",
+        )
+    )
+    assert decision.action is FinalizationAction.BLOCK
+    assert "D-013" in decision.user_message
 
 
 def test_provisional_or_next_iteration_language_is_allowed_with_unresolved_work(tmp_path):
@@ -185,3 +222,28 @@ def test_question_form_design_requests_still_activate_enforcement(tmp_path, user
     policy = _policy(tmp_path)
     assert policy.applies_to_turn(tmp_path, user_text) is True
     assert (tmp_path / "DESIGN-DECISIONS.md").is_file()
+
+
+def test_existing_ledger_keeps_generic_followup_in_enforced_design_scope(tmp_path):
+    policy = _policy(tmp_path)
+    assert policy.applies_to_turn(tmp_path, "Design a checkout flow") is True
+    assert policy.applies_to_turn(tmp_path, "Continue.") is True
+
+
+def test_completion_equivalent_ready_for_handoff_claim_is_validated(tmp_path):
+    policy = _policy(
+        tmp_path,
+        _validation(
+            passed=False,
+            reason="unresolved_decisions",
+            diagnostics=("Unresolved consequential decisions: D-021",),
+        ),
+    )
+    decision = policy.evaluate(
+        _context(
+            tmp_path,
+            response="The design meets all requirements and is ready for handoff.",
+        )
+    )
+    assert decision.action is FinalizationAction.BLOCK
+    assert "D-021" in decision.user_message

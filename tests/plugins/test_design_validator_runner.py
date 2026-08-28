@@ -17,6 +17,17 @@ def test_validator_requires_zero_exit_and_exact_pass_marker(tmp_path):
     assert not hasattr(result, "validator_sha256")
 
 
+def test_validator_runner_returns_the_ledger_supported_claim(tmp_path):
+    script = _script(
+        tmp_path / "validator.py",
+        'print("SUPPORTED CLAIM: Prototype-fidelity design complete for checkout")\n'
+        'print("DESIGN DECISIONS: CONTRACT PASSED")',
+    )
+    result = run_validator(tmp_path, validator_path=script, timeout_seconds=10)
+    assert result.passed is True
+    assert result.supported_claim == "Prototype-fidelity design complete for checkout"
+
+
 def test_zero_exit_without_marker_blocks(tmp_path):
     script = _script(tmp_path / "validator.py", 'print("looks good")')
     result = run_validator(tmp_path, validator_path=script, timeout_seconds=10)

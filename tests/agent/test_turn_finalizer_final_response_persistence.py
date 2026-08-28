@@ -184,6 +184,53 @@ def test_required_policy_block_replaces_candidate_before_persistence(monkeypatch
     assert "reasoning_content" not in agent.persisted_messages[-1]
 
 
+def test_turn_start_policy_snapshot_survives_registry_disappearance(monkeypatch, tmp_path):
+    manager = PluginManager(scope_key=str(tmp_path / "home"))
+    context = PluginContext(PluginManifest(name="required", key="required"), manager)
+    context.register_finalization_policy(
+        id="design-completion",
+        callback=lambda _ctx: FinalizationDecision(
+            action=FinalizationAction.BLOCK,
+            policy_id="design-completion",
+            reason_code="validator_failed",
+            user_message="Snapshot policy blocked unsupported completion.",
+        ),
+    )
+    snapshot = manager.iter_finalization_policies()
+    monkeypatch.setattr(
+        "hermes_cli.plugins.get_plugin_manager",
+        lambda: PluginManager(scope_key=str(tmp_path / "empty")),
+    )
+
+    agent = FakeAgent()
+    agent._response_was_previewed = False
+    agent._active_finalization_policy_ids = ("design-completion",)
+    agent._active_finalization_policies = snapshot
+    messages = [
+        {"role": "user", "content": "continue"},
+        {"role": "assistant", "content": "The design is complete."},
+    ]
+
+    result = finalize_turn(
+        agent,
+        final_response="The design is complete.",
+        api_call_count=1,
+        interrupted=False,
+        failed=False,
+        messages=messages,
+        conversation_history=[],
+        effective_task_id="task",
+        turn_id="turn",
+        user_message="continue",
+        original_user_message="continue",
+        _should_review_memory=False,
+        _turn_exit_reason="text_response(23 chars)",
+    )
+
+    assert result["failed"] is True
+    assert result["final_response"] == "Snapshot policy blocked unsupported completion."
+
+
 def test_finalization_integration_error_replaces_candidate_before_persistence(
     monkeypatch,
 ):

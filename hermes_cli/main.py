@@ -12545,6 +12545,23 @@ def _prepare_agent_startup(args) -> None:
                 "plugin discovery failed at CLI startup",
                 exc_info=True,
             )
+        if getattr(args, "decision_enforced", False):
+            from hermes_cli.plugins import discover_plugins, get_plugin_manager
+
+            discover_plugins()
+            required_policy = next(
+                (
+                    policy
+                    for policy in get_plugin_manager().iter_finalization_policies()
+                    if policy.id == "design-completion" and policy.required
+                ),
+                None,
+            )
+            if required_policy is None:
+                raise RuntimeError(
+                    "hermes 1 requires the bundled design-completion policy, "
+                    "but plugin registration did not succeed"
+                )
     _run_inline_mcp_discovery = True
     if _is_tui_chat_launch(args):
         # The TUI launcher hands off to a dedicated startup path that already

@@ -190,6 +190,57 @@ def test_open_map_status_must_be_disclosed_and_short_fidelity_must_qualify_claim
     assert "fidelity" in "\n".join(result.diagnostics).lower()
 
 
+def test_every_decision_record_must_appear_in_the_decision_map(tmp_path):
+    validator = _load_validator()
+    orphan = _valid_ledger().replace(
+        "## Unresolved consequential decisions",
+        """### D-099 — Orphaned record
+- Level: Detail
+- Question: Which local detail should change?
+- Criteria: Traceability and consistency
+- Alternatives: Keep it; change it
+- Selection: Change it
+- Tradeoff: More implementation work for clearer behavior
+- Evidence: Inspection found an inconsistency
+- Assumptions: The parent decision remains valid
+- Consequences: The detail changes in the artifact
+- Validation: Inspected after implementation
+- Reopen if: The parent decision changes
+
+## Unresolved consequential decisions""",
+    )
+    _write(tmp_path, orphan)
+    result = validator.validate_project(tmp_path)
+    assert result.passed is False
+    joined = "\n".join(result.diagnostics)
+    assert "D-099" in joined
+    assert "map" in joined.lower()
+
+
+def test_supported_claim_must_name_its_scope(tmp_path):
+    validator = _load_validator()
+    scope_free = _valid_ledger().replace(
+        "Prototype-fidelity design complete for cart through confirmation",
+        "Prototype-fidelity design complete",
+    )
+    _write(tmp_path, scope_free)
+    result = validator.validate_project(tmp_path)
+    assert result.passed is False
+    assert "scope" in "\n".join(result.diagnostics).lower()
+
+
+def test_supported_claim_cannot_hide_mismatched_fidelity_after_completion(tmp_path):
+    validator = _load_validator()
+    mismatched = _valid_ledger().replace(
+        "Prototype-fidelity design complete for cart through confirmation",
+        "Production implementation complete for cart through confirmation; tested prototype",
+    )
+    _write(tmp_path, mismatched)
+    result = validator.validate_project(tmp_path)
+    assert result.passed is False
+    assert "fidelity" in "\n".join(result.diagnostics).lower()
+
+
 def test_unknown_decision_map_status_is_rejected(tmp_path):
     validator = _load_validator()
     unknown = _valid_ledger().replace(

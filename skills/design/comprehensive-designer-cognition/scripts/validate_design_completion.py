@@ -202,6 +202,10 @@ def validate_project(project_root: str | Path) -> ValidationResult:
         diagnostics.append("Decision map must contain at least one parent → child entry")
     for decision_id in sorted(committed_ids - records.keys()):
         diagnostics.append(f"{decision_id} is committed or validated but has no decision record")
+    for decision_id in sorted(records.keys() - map_ids):
+        diagnostics.append(
+            f"{decision_id} has a consequential decision record but no decision-map entry"
+        )
 
     unresolved_lines = [
         line.strip()[1:].strip()
@@ -233,20 +237,29 @@ def validate_project(project_root: str | Path) -> ValidationResult:
     )
     fidelity = completion.get("Fidelity", "")
     supported_claim = completion.get("Supported claim", "")
+    if supported_claim and not re.search(r"\bfor\s+\S+", supported_claim, re.IGNORECASE):
+        diagnostics.append("Supported claim must name its completion scope with a 'for …' clause")
     meaningful_fidelity_tokens = {
         token
         for token in re.findall(r"[a-z0-9]+", fidelity.casefold())
         if len(token) >= 2 and token not in {"fidelity", "tested", "target"}
     }
-    if (
-        fidelity
-        and supported_claim
-        and meaningful_fidelity_tokens
-        and not any(token in supported_claim.casefold() for token in meaningful_fidelity_tokens)
-    ):
-        diagnostics.append(
-            "Supported claim must be qualified by the stated completion fidelity"
+    if fidelity and supported_claim and meaningful_fidelity_tokens:
+        completion_match = re.search(
+            r"\b(?:complete|completed|finished|finalized|delivered|ready)\b",
+            supported_claim,
+            re.IGNORECASE,
         )
+        claim_prefix = (
+            supported_claim[: completion_match.start()]
+            if completion_match
+            else supported_claim
+        )
+        prefix_tokens = set(re.findall(r"[a-z0-9]+", claim_prefix.casefold()))
+        if not (meaningful_fidelity_tokens & prefix_tokens):
+            diagnostics.append(
+                "Supported claim must bind the stated fidelity to the completion claim"
+            )
     if unresolved:
         diagnostics.append(
             "Completion claim is not qualified while consequential decisions remain unresolved"
@@ -264,6 +277,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     result = validate_project(args.project_root)
     if result.passed:
+        text = (Path(args.project_root).expanduser().resolve(strict=False) / LEDGER_NAME).read_text(
+            encoding="utf-8"
+        )
+        lines = text.splitlines()
+        completion_lines = _section(lines, "Completion status") or []
+        completion = _fields(completion_lines, owner="Completion status", diagnostics=[])
+        print(f"SUPPORTED CLAIM: {completion.get('Supported claim', '')}")
         print(PASS_MARKER)
         return 0
     print("DESIGN DECISIONS: NOT YET COMPLETE")

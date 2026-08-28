@@ -15,6 +15,8 @@ import subprocess
 import sys
 import types
 
+import pytest
+
 from hermes_cli import main as main_mod
 
 
@@ -89,3 +91,20 @@ def test_decision_launch_marker_reaches_the_tui_backend_child(monkeypatch):
         check=True,
     )
     assert completed.stdout.strip() == "True"
+
+
+def test_non_tui_decision_launch_fails_closed_when_policy_did_not_register(monkeypatch):
+    manager = types.SimpleNamespace(iter_finalization_policies=lambda: ())
+    monkeypatch.setitem(
+        sys.modules,
+        "hermes_cli.plugins",
+        types.SimpleNamespace(
+            start_background_plugin_discovery=lambda: None,
+            discover_plugins=lambda: None,
+            get_plugin_manager=lambda: manager,
+        ),
+    )
+    with pytest.raises(RuntimeError, match="design-completion"):
+        main_mod._prepare_agent_startup(
+            _args(tui=False, command="chat", decision_enforced=True)
+        )

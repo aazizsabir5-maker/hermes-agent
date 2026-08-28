@@ -19,6 +19,7 @@ class ValidatorResult:
     stdout: str
     stderr: str
     diagnostics: tuple[str, ...]
+    supported_claim: str = ""
 
 
 def run_validator(
@@ -39,15 +40,15 @@ def run_validator(
             check=False,
         )
     except subprocess.TimeoutExpired:
-        return ValidatorResult(False, "validator_timeout", None, "", "", ())
+        return ValidatorResult(False, "validator_timeout", None, "", "", (), "")
     except Exception:
-        return ValidatorResult(False, "validator_execution_error", None, "", "", ())
+        return ValidatorResult(False, "validator_execution_error", None, "", "", (), "")
 
     stdout_bytes = completed.stdout or b""
     stderr_bytes = completed.stderr or b""
     if len(stdout_bytes) + len(stderr_bytes) > max_output_bytes:
         return ValidatorResult(
-            False, "validator_output_too_large", completed.returncode, "", "", ()
+            False, "validator_output_too_large", completed.returncode, "", "", (), ""
         )
     stdout = stdout_bytes.decode("utf-8", errors="replace")
     stderr = stderr_bytes.decode("utf-8", errors="replace")
@@ -55,6 +56,14 @@ def run_validator(
         line[2:].strip()
         for line in stdout.splitlines()
         if line.startswith("- ") and line[2:].strip()
+    )
+    supported_claim = next(
+        (
+            line.removeprefix("SUPPORTED CLAIM:").strip()
+            for line in stdout.splitlines()
+            if line.startswith("SUPPORTED CLAIM:")
+        ),
+        "",
     )
     passed = completed.returncode == 0 and PASS_MARKER in {
         line.strip() for line in stdout.splitlines()
@@ -68,5 +77,11 @@ def run_validator(
     else:
         reason = "ledger_invalid" if completed.returncode == 1 else "validator_execution_error"
     return ValidatorResult(
-        passed, reason, completed.returncode, stdout, stderr, diagnostics
+        passed,
+        reason,
+        completed.returncode,
+        stdout,
+        stderr,
+        diagnostics,
+        supported_claim,
     )

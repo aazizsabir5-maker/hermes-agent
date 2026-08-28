@@ -94,7 +94,7 @@ def _tree_depth(prefix: str) -> int:
     return (len(prefix[:branch_at].expandtabs(4)) // 4) + 1
 
 
-def _parse_map(text: str) -> list[tuple[str, str, str, str | None, int]]:
+def _parse_map(text: str) -> list[tuple[str, str, str, str | None, int, str]]:
     result = []
     for line in _section(text, "Decision tree"):
         match = _MAP_RE.match(line)
@@ -107,6 +107,7 @@ def _parse_map(text: str) -> list[tuple[str, str, str, str | None, int]]:
                     status.strip(),
                     record_number,
                     _tree_depth(prefix),
+                    map_number,
                 )
             )
     return result
@@ -189,7 +190,7 @@ def migrate(root: Path) -> tuple[Path, tuple[str, ...]]:
 
     map_lines = []
     parents_by_depth: dict[int, str] = {}
-    for decision_id, title, status, _record, depth in map_entries:
+    for decision_id, title, status, _record, depth, _map_number in map_entries:
         parent_id = (
             "design boundary"
             if depth == 0
@@ -225,12 +226,24 @@ def migrate(root: Path) -> tuple[Path, tuple[str, ...]]:
         )
 
     unresolved = []
+    decision_id_by_map_number = {
+        map_number: decision_id
+        for decision_id, _title, _status, _record, _depth, map_number in map_entries
+    }
     for line in _section(map_text, "Unresolved in-scope nodes"):
         stripped = line.strip()
         if stripped.startswith("-"):
-            unresolved.append(re.sub(r"\bDM-(\d{3,})\b", r"D-\1", stripped))
+            unresolved.append(
+                re.sub(
+                    r"\bDM-(\d{3,})\b",
+                    lambda match: decision_id_by_map_number.get(
+                        match.group(1), _decision_id(match.group(1))
+                    ),
+                    stripped,
+                )
+            )
     known_unresolved_ids = " ".join(unresolved)
-    for decision_id, title, status, _record, _depth in map_entries:
+    for decision_id, title, status, _record, _depth, _map_number in map_entries:
         if status.lower() in {"open", "provisional", "reopened", "blocked"} and decision_id not in known_unresolved_ids:
             unresolved.append(f"- {decision_id} — {title} [{status}]")
     if not unresolved:

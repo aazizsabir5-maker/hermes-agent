@@ -625,7 +625,7 @@ def build_turn_context(
     # Scope the lean completion gate at turn start. Model-authored streaming is
     # withheld only for applicable local policy turns; ordinary sessions keep
     # the upstream streaming path unchanged.
-    active_policy_ids = []
+    active_policies = []
     try:
         from agent.finalization_policy import policy_buffers_turn
         from agent.runtime_cwd import resolve_context_cwd
@@ -641,12 +641,14 @@ def build_turn_context(
                 policy, str(project_root), user_message
             )
             if applies:
-                active_policy_ids.append(policy.id)
+                active_policies.append(policy)
     except Exception:
         logger.debug("completion policy turn scoping failed", exc_info=True)
-    agent._active_finalization_policy_ids = tuple(active_policy_ids)
-    agent._finalization_buffering_required = bool(active_policy_ids)
-    if active_policy_ids:
+    agent._active_finalization_policies = tuple(active_policies)
+    active_policy_ids = tuple(policy.id for policy in active_policies)
+    agent._active_finalization_policy_ids = active_policy_ids
+    agent._finalization_buffering_required = bool(active_policies)
+    if active_policies:
         agent._decision_buffered_callbacks = (
             getattr(agent, "stream_delta_callback", None),
             getattr(agent, "interim_assistant_callback", None),

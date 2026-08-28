@@ -54,21 +54,18 @@ _FINISH_REQUEST_RE = re.compile(
 _COMPLETION_CLAIM_RE = re.compile(
     r"\b(is|are|'s|has been|have been)\s+(?:now\s+)?(?:fully\s+)?"
     r"(complete|completed|finished|finalized|done|delivered|shipped)\b|"
-    r"\b(production[- ]ready|fully designed|final delivery|completion claim)\b|"
+    r"\b(production[- ]ready|fully designed|completion claim)\b|"
+    r"(?<!not )(?<!not yet )\bfinal delivery\b|"
     r"\b(?:i|we)(?:'ve| have)?\s+(?:now\s+)?(?:fully\s+)?"
     r"(?:completed|finished|finalized|delivered|shipped)\b|"
     r"\b(?:i|we)(?:'m| am| are)\s+(?:now\s+)?done\b|"
+    r"\b(?:concept|prototype|system|high[- ]fidelity|production(?:[- ]implementation)?)"
+    r"[- ](?:fidelity[- ]?)?(?:design|artifact|implementation)?\s+complete\b|"
+    r"\bsystem\s+specified\b|"
+    r"\b(?:meets all requirements|ready for handoff)\b|"
     r"^(?:done|complete|completed|finished|finalized|delivered|shipped)[.!]?$",
     re.IGNORECASE | re.MULTILINE,
 )
-_PROVISIONAL_RE = re.compile(
-    r"\b(provisional|not (?:yet )?(?:complete|finished|done)|"
-    r"ready for (?:the )?(?:next|another) (?:iteration|commitment)|"
-    r"validation pending|partially specified)\b",
-    re.IGNORECASE,
-)
-
-
 def _stringify(value: Any) -> str:
     if isinstance(value, str):
         return value
@@ -80,6 +77,10 @@ def _stringify(value: Any) -> str:
 
 def _enabled(value: bool | Callable[[], bool]) -> bool:
     return bool(value() if callable(value) else value)
+
+
+def _normalized_claim(value: str) -> str:
+    return re.sub(r"\s+", " ", value).strip().rstrip(".").casefold()
 
 
 def _is_design_request(text: str) -> bool:
@@ -127,11 +128,13 @@ class DesignCompletionPolicy:
     def applies_to_turn(self, project_root: str, user_message: Any) -> bool:
         if not _enabled(self.enforced):
             return False
+        root = Path(project_root).expanduser().resolve(strict=False)
+        if (root / "DESIGN-DECISIONS.md").is_file():
+            return True
         text = _stringify(user_message)
         design_request = _is_design_request(text)
         finish_request = bool(_FINISH_REQUEST_RE.search(text))
         if design_request:
-            root = Path(project_root).expanduser().resolve(strict=False)
             self._ensure_ledger(root)
         return design_request or finish_request
 
@@ -163,8 +166,6 @@ class DesignCompletionPolicy:
 
         response = context.response_text or ""
         completion_claim = bool(_COMPLETION_CLAIM_RE.search(response))
-        if _PROVISIONAL_RE.search(response):
-            completion_claim = False
         if not completion_claim:
             return FinalizationDecision(
                 FinalizationAction.ALLOW,
@@ -189,6 +190,18 @@ class DesignCompletionPolicy:
                 "This design is not yet complete. The decision ledger could not be validated.",
             )
         if validation.passed:
+            supported_claim = str(getattr(validation, "supported_claim", "") or "").strip()
+            if not supported_claim or _normalized_claim(supported_claim) not in _normalized_claim(
+                response
+            ):
+                return FinalizationDecision(
+                    FinalizationAction.BLOCK,
+                    "design-completion",
+                    "candidate_claim_unqualified",
+                    "This design is not yet complete. Use the ledger's fidelity- and "
+                    "scope-qualified supported claim before declaring completion.",
+                    evidence={"ledger_valid": True, "candidate_claim_qualified": False},
+                )
             return FinalizationDecision(
                 FinalizationAction.ALLOW,
                 "design-completion",

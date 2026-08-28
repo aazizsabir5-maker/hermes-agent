@@ -161,3 +161,24 @@ def test_refuses_to_overwrite_an_existing_ledger(tmp_path):
     assert completed.returncode != 0
     assert ledger.read_text(encoding="utf-8") == "keep reviewed ledger"
     assert "already exists" in (completed.stdout + completed.stderr).lower()
+
+
+def test_migration_rewrites_unresolved_map_id_to_its_linked_record_id(tmp_path):
+    _legacy_project(tmp_path)
+    map_path = tmp_path / "DECISION-MAP.md"
+    map_path.write_text(
+        map_path.read_text(encoding="utf-8")
+        .replace("DM-020 Offline handoff", "DM-777 Offline handoff")
+        .replace("DM-020 — Offline handoff", "DM-777 — Offline handoff"),
+        encoding="utf-8",
+    )
+
+    completed = subprocess.run(
+        [sys.executable, str(MIGRATOR), str(tmp_path)],
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    ledger = (tmp_path / "DESIGN-DECISIONS.md").read_text(encoding="utf-8")
+    assert "D-020 — Offline handoff after the radio test" in ledger
+    assert "D-777 — Offline handoff after the radio test" not in ledger

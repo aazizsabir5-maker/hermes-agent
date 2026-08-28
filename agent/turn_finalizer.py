@@ -267,11 +267,19 @@ def finalize_turn(
             from agent.runtime_cwd import resolve_context_cwd
             from hermes_cli.plugins import get_plugin_manager
 
-            policies = [
-                policy
-                for policy in get_plugin_manager().iter_finalization_policies()
-                if policy.id in active_policy_ids
-            ]
+            snapshotted_policies = getattr(agent, "_active_finalization_policies", None)
+            policy_source = (
+                snapshotted_policies
+                if snapshotted_policies is not None
+                else get_plugin_manager().iter_finalization_policies()
+            )
+            policies = [policy for policy in policy_source if policy.id in active_policy_ids]
+            missing_policy_ids = active_policy_ids - {policy.id for policy in policies}
+            if missing_policy_ids:
+                raise RuntimeError(
+                    "required finalization policy disappeared: "
+                    + ", ".join(sorted(missing_policy_ids))
+                )
             project_root = (
                 resolve_context_cwd()
                 or getattr(agent, "working_directory", None)
