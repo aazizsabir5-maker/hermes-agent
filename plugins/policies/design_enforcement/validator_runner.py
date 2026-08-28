@@ -70,4 +70,3 @@ def run_validator(
     return ValidatorResult(
         passed, reason, completed.returncode, stdout, stderr, diagnostics
     )
-
