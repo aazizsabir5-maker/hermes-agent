@@ -1093,12 +1093,6 @@ def init_agent(
     # Internal stream callback (set during streaming TTS).
     # Initialized here so _vprint can reference it before run_conversation.
     agent._stream_callback = None
-    # Armed per turn when the active plugin manager has any required
-    # finalization policy.  While true, candidate assistant text is buffered.
-    agent._finalization_buffering_required = False
-    agent._finalization_policy_startup_error = None
-    agent._active_finalization_policy_ids = ()
-    agent._turn_project_required_policy_ids = ()
     # Deferred paragraph break flag — set after tool iterations so a
     # single "\n\n" is prepended to the next real text delta.
     agent._stream_needs_break = False

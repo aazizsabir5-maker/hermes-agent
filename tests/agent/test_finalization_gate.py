@@ -1,14 +1,6 @@
-"""The host release gate persists its decision before returning deliverable text."""
+"""The lean gate replaces a candidate response without provenance state."""
 
-from __future__ import annotations
-
-import json
-
-from agent.finalization_gate import (
-    AUDIT_FAILURE_MESSAGE,
-    DEFAULT_BLOCK_MESSAGE,
-    apply_finalization_gate,
-)
+from agent.finalization_gate import apply_finalization_gate
 from agent.finalization_policy import (
     FinalizationAction,
     FinalizationContext,
@@ -17,108 +9,57 @@ from agent.finalization_policy import (
 )
 
 
-def _context(text="candidate secret"):
+def _context(text="At prototype fidelity, the design is complete."):
     return FinalizationContext.for_response(
-        session_id="s1",
-        task_id="task1",
-        turn_id="turn1",
+        session_id="session",
+        task_id="task",
+        turn_id="turn",
         platform="cli",
         model="provider/model",
         project_root="/tmp/project",
-        user_message="finish it",
+        user_message="Finish this design",
         response_text=text,
-        mode="finalizing",
+        metadata={"active_policy_ids": ("design-completion",)},
     )
 
 
-def _policy(action=FinalizationAction.ALLOW):
-    def callback(_ctx):
-        return FinalizationDecision(
-            action=action,
-            policy_id="required",
-            reason_code="passed" if action is FinalizationAction.ALLOW else "failed",
-            user_message="" if action is FinalizationAction.ALLOW else "Completion blocked.",
-            evidence={"subject_sha256": "a" * 64},
-        )
-
-    return RegisteredFinalizationPolicy(id="required", callback=callback, owner="test")
-
-
-def test_allow_is_audited_before_candidate_is_released(tmp_path):
-    audit = tmp_path / "audit.jsonl"
-    result = apply_finalization_gate(_context(), [_policy()], audit_path=audit)
-    assert result.allowed is True
-    assert result.response_text == "candidate secret"
-    record = json.loads(audit.read_text(encoding="utf-8"))
-    assert record["decision"] == "allow"
-    assert record["response_sha256"] == _context().response_sha256
-    assert record["policy_ids"] == ["required"]
-    assert result.audit_id == record["audit_id"]
-
-
-def test_denial_discards_candidate_and_audits_block(tmp_path):
-    audit = tmp_path / "audit.jsonl"
-    result = apply_finalization_gate(
-        _context(), [_policy(FinalizationAction.BLOCK)], audit_path=audit
-    )
-    assert result.allowed is False
-    assert result.response_text == DEFAULT_BLOCK_MESSAGE
-    assert "candidate secret" not in result.response_text
-    assert json.loads(audit.read_text(encoding="utf-8"))["decision"] == "block"
-
-
-def test_policy_cannot_echo_candidate_through_denial_message(tmp_path):
-    policy = RegisteredFinalizationPolicy(
-        "required",
-        lambda context: FinalizationDecision(
-            FinalizationAction.BLOCK,
-            "required",
-            "denied",
-            context.response_text,
+def _policy(action, message=""):
+    return RegisteredFinalizationPolicy(
+        "design-completion",
+        lambda _context: FinalizationDecision(
+            action,
+            "design-completion",
+            "ledger_valid" if action is FinalizationAction.ALLOW else "missing_ledger",
+            message,
         ),
     )
+
+
+def test_allow_returns_candidate_without_writing_runtime_state(tmp_path):
+    before = set(tmp_path.iterdir())
     result = apply_finalization_gate(
-        _context("CANDIDATE SECRET"),
-        [policy],
-        audit_path=tmp_path / "audit.jsonl",
+        _context(), [_policy(FinalizationAction.ALLOW)]
     )
-    assert result.response_text == DEFAULT_BLOCK_MESSAGE
-    assert "CANDIDATE" not in result.response_text
-
-
-def test_audit_write_failure_blocks_even_when_policy_allows(tmp_path):
-    directory = tmp_path / "not-a-file"
-    directory.mkdir()
-    result = apply_finalization_gate(_context(), [_policy()], audit_path=directory)
-    assert result.allowed is False
-    assert result.reason_code == "finalization_audit_failed"
-    assert "candidate secret" not in result.response_text
-
-
-def test_unprotected_turn_is_unchanged_and_creates_no_audit(tmp_path):
-    audit = tmp_path / "audit.jsonl"
-    result = apply_finalization_gate(_context(), [], audit_path=audit)
     assert result.allowed is True
-    assert result.response_text == "candidate secret"
-    assert result.applied is False
-    assert not audit.exists()
+    assert result.response_text == _context().response_text
+    assert set(tmp_path.iterdir()) == before
+    assert not hasattr(result, "audit_id")
+    assert not hasattr(result, "response_sha256")
 
 
-def test_audit_is_idempotent_for_same_turn_and_response(tmp_path):
-    audit = tmp_path / "audit.jsonl"
-    first = apply_finalization_gate(_context(), [_policy()], audit_path=audit)
-    second = apply_finalization_gate(_context(), [_policy()], audit_path=audit)
-    lines = audit.read_text(encoding="utf-8").splitlines()
-    assert first.audit_id == second.audit_id
-    assert len(lines) == 1
-
-
-def test_torn_audit_tail_blocks_release(tmp_path):
-    audit = tmp_path / "audit.jsonl"
-    audit.write_text('{"audit_id":"truncated"', encoding="utf-8")
-
-    result = apply_finalization_gate(_context(), [_policy()], audit_path=audit)
-
+def test_block_uses_specific_host_authored_policy_message():
+    message = "This design is not yet complete. DESIGN-DECISIONS.md is missing"
+    result = apply_finalization_gate(
+        _context("candidate completion claim"),
+        [_policy(FinalizationAction.BLOCK, message)],
+    )
     assert result.allowed is False
-    assert result.reason_code == "finalization_audit_failed"
-    assert result.response_text == AUDIT_FAILURE_MESSAGE
+    assert result.response_text == message
+    assert "candidate completion claim" not in result.response_text
+
+
+def test_no_policy_leaves_ordinary_response_unchanged():
+    result = apply_finalization_gate(_context("ordinary response"), [])
+    assert result.applied is False
+    assert result.allowed is True
+    assert result.response_text == "ordinary response"

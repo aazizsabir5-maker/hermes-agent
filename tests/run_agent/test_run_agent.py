@@ -3267,48 +3267,6 @@ class TestRunConversation:
         assert result is failed_result
         assert order == ["logical", "metrics"]
 
-    def test_buffered_early_return_is_forced_through_finalizer_backstop(self, agent):
-        candidate_result = {
-            "final_response": "CANDIDATE SECRET",
-            "messages": [
-                {"role": "user", "content": "finish"},
-                {
-                    "role": "assistant",
-                    "content": "CANDIDATE SECRET",
-                    "reasoning_details": [{"text": "CANDIDATE SECRET"}],
-                },
-            ],
-            "completed": False,
-            "failed": True,
-            "error": "CANDIDATE SECRET",
-        }
-        agent._finalization_buffering_required = True
-        finalized = {
-            "final_response": "HOST BLOCK",
-            "messages": candidate_result["messages"],
-            "completed": False,
-            "failed": True,
-            "finalization": {"status": "blocked"},
-        }
-
-        with (
-            patch(
-                "agent.conversation_loop.run_conversation",
-                return_value=candidate_result,
-            ),
-            patch(
-                "agent.turn_finalizer.finalize_turn",
-                return_value=finalized,
-            ) as finalize,
-        ):
-            result = agent.run_conversation("finish")
-
-        assert result["final_response"] == "HOST BLOCK"
-        assert result["error"] == "HOST BLOCK"
-        assert result["finalization"]["status"] == "blocked"
-        finalized_messages = finalize.call_args.kwargs["messages"]
-        assert finalized_messages[-1] == {"role": "assistant", "content": ""}
-
     def test_api_request_error_hook_skips_payload_work_without_listener(self, agent, monkeypatch):
         payload_built = False
         hook_called = False

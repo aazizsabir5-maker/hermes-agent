@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from agent.context_compressor import ContextCompressor
+from agent.finalization_policy import RegisteredFinalizationPolicy
 from agent.turn_context import TurnContext, build_turn_context
 from hermes_state import SessionDB
 
@@ -210,23 +211,60 @@ def test_returns_turn_context_with_user_message_appended():
     assert ctx.active_system_prompt == "SYSTEM"
 
 
-def test_trusted_readonly_reviewer_does_not_reenter_finalization_policy():
+def test_applicable_finalization_policy_withholds_stream_callbacks():
     agent = _FakeAgent()
-    agent._trusted_readonly_review_session = True
-    agent._active_finalization_policy_ids = ("design-completion",)
-    policy = types.SimpleNamespace(
+    deltas = []
+    interim = []
+    reasoning = []
+    agent.stream_delta_callback = deltas.append
+    agent.interim_assistant_callback = interim.append
+    agent.reasoning_callback = reasoning.append
+    policy = RegisteredFinalizationPolicy(
         id="design-completion",
-        required=True,
+        callback=lambda _context: None,
         turn_predicate=lambda _root, _message: True,
     )
     manager = types.SimpleNamespace(iter_finalization_policies=lambda: (policy,))
 
-    with patch("hermes_cli.plugins.get_plugin_manager", return_value=manager):
-        _build(agent, user_message="Independently review this completed design")
+    with (
+        patch("hermes_cli.plugins.get_plugin_manager", return_value=manager),
+        patch("agent.runtime_cwd.resolve_context_cwd", return_value="/tmp/project"),
+    ):
+        _build(agent, user_message="Design a checkout flow")
+
+    assert agent._active_finalization_policy_ids == ("design-completion",)
+    assert agent._finalization_buffering_required is True
+    assert agent._decision_buffered_callbacks == (
+        deltas.append,
+        interim.append,
+        reasoning.append,
+    )
+    assert agent.stream_delta_callback is None
+    assert agent.interim_assistant_callback is None
+    assert agent.reasoning_callback is None
+
+
+def test_inapplicable_finalization_policy_preserves_normal_streaming():
+    agent = _FakeAgent()
+    deltas = []
+    agent.stream_delta_callback = deltas.append
+    policy = RegisteredFinalizationPolicy(
+        id="design-completion",
+        callback=lambda _context: None,
+        turn_predicate=lambda _root, _message: False,
+    )
+    manager = types.SimpleNamespace(iter_finalization_policies=lambda: (policy,))
+
+    with (
+        patch("hermes_cli.plugins.get_plugin_manager", return_value=manager),
+        patch("agent.runtime_cwd.resolve_context_cwd", return_value="/tmp/project"),
+    ):
+        _build(agent, user_message="Explain Python tuples")
 
     assert agent._active_finalization_policy_ids == ()
-    assert agent._turn_project_required_policy_ids == ()
     assert agent._finalization_buffering_required is False
+    assert agent._decision_buffered_callbacks is None
+    assert agent.stream_delta_callback == deltas.append
 
 
 def test_user_message_preserves_platform_event_timestamp():

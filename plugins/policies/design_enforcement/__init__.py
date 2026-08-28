@@ -1,4 +1,4 @@
-"""Bundled policy that injects the decision philosophy for \`hermes 1\`."""
+"""Bundled policy that injects the decision philosophy for ``hermes 1``."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ _decision_enforced = False
 
 
 def enable_decision_enforcement() -> None:
-    """Mark this process as launched through the internal \`hermes 1\` entry point."""
+    """Mark this process as launched through the internal ``hermes 1`` entry point."""
     global _decision_enforced
     _decision_enforced = True
 
@@ -42,7 +42,7 @@ def register(ctx) -> None:
     skill_text = _SKILL.read_text(encoding="utf-8")
     required_skill_prompt = (
         "MANDATORY DECISION PHILOSOPHY FOR THIS ENFORCED DESIGN SESSION. "
-        "Apply it proportionately and maintain DESIGN-DECISIONS.md automatically.\\n\\n"
+        "Apply it proportionately and maintain DESIGN-DECISIONS.md automatically.\n\n"
         + skill_text
     )
     ctx.register_system_prompt_section(
@@ -55,4 +55,3 @@ def register(ctx) -> None:
         ),
         max_chars=min(40_000, len(required_skill_prompt)),
     )
-

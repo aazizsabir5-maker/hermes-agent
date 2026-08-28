@@ -2119,18 +2119,10 @@ def build_assistant_message(agent, assistant_message, finish_reason: str) -> dic
             combined = "\n\n".join(b.strip() for b in think_blocks if b.strip())
             reasoning_text = combined or None
 
-    if (
-        reasoning_text
-        and agent.verbose_logging
-        and not getattr(agent, "_finalization_buffering_required", False)
-    ):
+    if reasoning_text and agent.verbose_logging:
         logging.debug(f"Captured reasoning ({len(reasoning_text)} chars): {reasoning_text}")
 
-    if (
-        reasoning_text
-        and agent.reasoning_callback
-        and not getattr(agent, "_finalization_buffering_required", False)
-    ):
+    if reasoning_text and agent.reasoning_callback:
         # Skip callback when streaming is active — reasoning was already
         # displayed during the stream via one of two paths:
         #   (a) _fire_reasoning_delta (structured reasoning_content deltas)
@@ -4080,10 +4072,7 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
                     agent._fire_stream_delta(text)
                     deltas_were_sent["yes"] = True
                 return
-            if (
-                agent.stream_delta_callback
-                and not getattr(agent, "_finalization_buffering_required", False)
-            ):
+            if agent.stream_delta_callback:
                 for text in pending_parts:
                     try:
                         agent.stream_delta_callback(text)
@@ -4221,10 +4210,7 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
                 # reasoning display.  Non-reasoning text is harmlessly
                 # suppressed by the CLI's _stream_delta when the stream
                 # box is already closed (tool boundary flush).
-                elif (
-                    agent.stream_delta_callback
-                    and not getattr(agent, "_finalization_buffering_required", False)
-                ):
+                elif agent.stream_delta_callback:
                     try:
                         agent.stream_delta_callback(delta_content)
                         agent._record_streamed_assistant_text(delta_content)

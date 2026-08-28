@@ -2261,22 +2261,12 @@ class AIAgent:
                     continue
                 role = msg.get("role", "unknown")
                 content = msg.get("content")
-                _buffer_unapproved_assistant = (
-                    role == "assistant"
-                    and getattr(self, "_finalization_buffering_required", False)
-                    and not getattr(
-                        self, "_finalization_release_persistence_active", False
-                    )
-                )
                 # api_content sidecar: the exact bytes sent to the API when
                 # they differ from the clean content (stamped by the turn
                 # prologue for prefetch/plugin injections). Written verbatim
                 # so replay can reproduce the sent prefix byte-for-byte.
                 _row_api_content = msg.get("api_content")
                 if not isinstance(_row_api_content, str):
-                    _row_api_content = None
-                if _buffer_unapproved_assistant:
-                    content = ""
                     _row_api_content = None
                 _row_timestamp = msg.get("timestamp")
                 # Apply the persist override to THIS row's written values only
@@ -2364,22 +2354,6 @@ class AIAgent:
                     ]
                 elif isinstance(msg.get("tool_calls"), list):
                     tool_calls_data = msg["tool_calls"]
-                if _buffer_unapproved_assistant and tool_calls_data:
-                    _redacted_tool_calls = []
-                    for _tool_call in tool_calls_data:
-                        if isinstance(_tool_call, dict):
-                            _safe_call = dict(_tool_call)
-                            _safe_function = _safe_call.get("function")
-                            if isinstance(_safe_function, dict):
-                                _safe_function = dict(_safe_function)
-                                _safe_function["name"] = "buffered_tool"
-                                _safe_function["arguments"] = "{}"
-                                _safe_call["function"] = _safe_function
-                            else:
-                                _safe_call["name"] = "buffered_tool"
-                                _safe_call["arguments"] = "{}"
-                            _redacted_tool_calls.append(_safe_call)
-                    tool_calls_data = _redacted_tool_calls
                 _batch_rows.append({
                     "role": role,
                     "content": content,
@@ -2389,21 +2363,11 @@ class AIAgent:
                     "finish_reason": msg.get("finish_reason"),
                     # Reasoning/codex fields are role-gated (assistant-only)
                     # inside _insert_message_rows — pass through untouched.
-                    "reasoning": None
-                    if _buffer_unapproved_assistant
-                    else msg.get("reasoning"),
-                    "reasoning_content": None
-                    if _buffer_unapproved_assistant
-                    else msg.get("reasoning_content"),
-                    "reasoning_details": None
-                    if _buffer_unapproved_assistant
-                    else msg.get("reasoning_details"),
-                    "codex_reasoning_items": None
-                    if _buffer_unapproved_assistant
-                    else msg.get("codex_reasoning_items"),
-                    "codex_message_items": None
-                    if _buffer_unapproved_assistant
-                    else msg.get("codex_message_items"),
+                    "reasoning": msg.get("reasoning"),
+                    "reasoning_content": msg.get("reasoning_content"),
+                    "reasoning_details": msg.get("reasoning_details"),
+                    "codex_reasoning_items": msg.get("codex_reasoning_items"),
+                    "codex_message_items": msg.get("codex_message_items"),
                     "_compressed_summary": bool(msg.get(COMPRESSED_SUMMARY_METADATA_KEY)),
                     "timestamp": _row_timestamp,
                     "api_content": _row_api_content,
@@ -6612,20 +6576,6 @@ class AIAgent:
 
     def _reset_stream_delivery_tracking(self) -> None:
         """Reset tracking for text delivered during the current model response."""
-        if getattr(self, "_finalization_buffering_required", False):
-            # Reset scrubber state but never flush model-generated tail bytes to
-            # callbacks before required policies approve the complete response.
-            for scrubber in (
-                getattr(self, "_stream_think_scrubber", None),
-                getattr(self, "_stream_context_scrubber", None),
-            ):
-                if scrubber is not None:
-                    try:
-                        scrubber.flush()
-                    except Exception:
-                        pass
-            self._current_streamed_assistant_text = ""
-            return
         # Flush any benign partial-tag tail held by the think scrubber
         # first (#17924): an innocent '<' at the end of the stream that
         # turned out not to be a tag prefix should reach the UI.  Then
@@ -6667,8 +6617,6 @@ class AIAgent:
 
     def _record_streamed_assistant_text(self, text: str) -> None:
         """Accumulate visible assistant text emitted through stream callbacks."""
-        if getattr(self, "_finalization_buffering_required", False):
-            return
         # Single-writer guard (#65991): a superseded stream must not pollute the
         # turn's accumulated text (which also feeds the interim-visible-text
         # de-dup comparison), even when a caller reaches this directly (the
@@ -6795,8 +6743,6 @@ class AIAgent:
 
     def _fire_streamed_codex_commentary(self, text: str) -> None:
         """Deliver a completed live Codex commentary message immediately."""
-        if getattr(self, "_finalization_buffering_required", False):
-            return
         cb = getattr(self, "interim_assistant_callback", None)
         if cb is None or not isinstance(text, str):
             return
@@ -6824,8 +6770,6 @@ class AIAgent:
         when the only streamed text was unrelated mid-turn commentary. (#65919
         review: response-loss blocker)
         """
-        if getattr(self, "_finalization_buffering_required", False):
-            return
         if not isinstance(assistant_msg, dict):
             return
         commentary_parts = self._extract_codex_interim_visible_parts(assistant_msg)
@@ -6881,48 +6825,6 @@ class AIAgent:
                 self._record_delivered_interim_text(visible)
         except Exception:
             logger.debug("interim_assistant_callback error", exc_info=True)
-
-    def _redact_buffered_interim_assistant_message(
-        self, assistant_msg: Dict[str, Any]
-    ) -> None:
-        """Keep tool-call structure while removing unapproved model text."""
-        if not getattr(self, "_finalization_buffering_required", False):
-            return
-        assistant_msg["content"] = ""
-        for candidate_field in (
-            "reasoning",
-            "reasoning_content",
-            "reasoning_details",
-            "anthropic_content_blocks",
-            "codex_reasoning_items",
-            "codex_message_items",
-        ):
-            assistant_msg.pop(candidate_field, None)
-
-    def _redact_buffered_terminal_assistant_message(
-        self, assistant_msg: Dict[str, Any]
-    ) -> None:
-        """Remove all unapproved assistant prose and tool-call payloads."""
-        self._redact_buffered_interim_assistant_message(assistant_msg)
-        if not getattr(self, "_finalization_buffering_required", False):
-            return
-        tool_calls = assistant_msg.get("tool_calls")
-        if not isinstance(tool_calls, list):
-            return
-        for tool_call in tool_calls:
-            if isinstance(tool_call, dict):
-                function = tool_call.get("function")
-                if isinstance(function, dict):
-                    function["name"] = "buffered_tool"
-                    function["arguments"] = "{}"
-            else:
-                function = getattr(tool_call, "function", None)
-                if function is not None:
-                    try:
-                        function.name = "buffered_tool"
-                        function.arguments = "{}"
-                    except Exception:
-                        pass
 
     def _ensure_stream_writer_state(self) -> None:
         """Lazily create the single-writer guard fields (#65991).
@@ -7018,8 +6920,6 @@ class AIAgent:
             logger.debug("on_stream_start plugin hook enqueue failed", exc_info=True)
 
     def _emit_stream_end(self, *, final_text: str, finished: bool, error: str | None) -> None:
-        if getattr(self, "_finalization_buffering_required", False) is True:
-            final_text = ""
         try:
             from agent.plugin_stream_hooks import enqueue_plugin_stream_hook
 
@@ -7035,11 +6935,6 @@ class AIAgent:
 
     def _fire_stream_delta(self, text: str) -> None:
         """Fire all registered stream delta callbacks (display + TTS)."""
-        # Required finalization policies evaluate the complete, transformed
-        # response.  Candidate text must remain host-buffered until that gate
-        # allows release; tool progress/reasoning use separate callbacks.
-        if getattr(self, "_finalization_buffering_required", False) is True:
-            return
         # Single-writer guard (#65991): a superseded stream must not interleave
         # its tokens into the turn alongside the retry that replaced it.
         if self._stream_writer_superseded():
@@ -7109,8 +7004,6 @@ class AIAgent:
 
     def _fire_reasoning_delta(self, text: str) -> None:
         """Fire reasoning callback if registered."""
-        if getattr(self, "_finalization_buffering_required", False):
-            return
         # Single-writer guard (#65991): fence out a superseded stream's
         # reasoning deltas the same way as content deltas.
         if self._stream_writer_superseded():
@@ -9091,52 +8984,6 @@ class AIAgent:
                     # Interrupt clear is deferred to after thread join in the
                     # outer finally: a refresher firing between stop and join
                     # would otherwise set an interrupt that survives the clear.
-            if (
-                isinstance(result, dict)
-                and getattr(self, "_finalization_buffering_required", False)
-                and not result.get("finalization")
-            ):
-                # Defense in depth: every early return from the inner loop must
-                # cross the same release boundary. Keep only host-owned status
-                # flags; arbitrary early-return metadata can contain provider or
-                # model text and is therefore not copied through this backstop.
-                from agent.turn_finalizer import finalize_turn
-
-                _early_messages = result.get("messages")
-                if not isinstance(_early_messages, list):
-                    _early_messages = []
-                for _message in _early_messages:
-                    if (
-                        isinstance(_message, dict)
-                        and _message.get("role") == "assistant"
-                    ):
-                        self._redact_buffered_terminal_assistant_message(_message)
-                _early_finalized = finalize_turn(
-                    self,
-                    final_response=str(result.get("final_response") or ""),
-                    api_call_count=int(result.get("api_calls") or 0),
-                    interrupted=bool(result.get("interrupted")),
-                    failed=bool(result.get("failed")),
-                    messages=_early_messages,
-                    conversation_history=conversation_history or [],
-                    effective_task_id=effective_task_id,
-                    turn_id=str(getattr(self, "_current_turn_id", "") or relay_turn_id),
-                    user_message=user_message,
-                    original_user_message=user_message,
-                    _should_review_memory=False,
-                    _turn_exit_reason="unfinalized_early_return",
-                )
-                for _status_key in (
-                    "completed",
-                    "partial",
-                    "failed",
-                    "interrupted",
-                ):
-                    if _status_key in result:
-                        _early_finalized[_status_key] = bool(result[_status_key])
-                if result.get("error") is not None:
-                    _early_finalized["error"] = _early_finalized["final_response"]
-                result = _early_finalized
             terminal = result if isinstance(result, dict) else {}
             if terminal.get("interrupted") is True:
                 relay_outcome = "cancelled"
