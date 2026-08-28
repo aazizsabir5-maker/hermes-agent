@@ -1,0 +1,5 @@
+name: design_enforcement
+version: 0.1.0
+description: "Fail-closed runtime enforcement for substantial design completion."
+author: NousResearch
+kind: backend

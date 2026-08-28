@@ -2,6 +2,8 @@ from types import SimpleNamespace
 from typing import Any
 
 from agent.turn_finalizer import finalize_turn
+from agent.finalization_policy import FinalizationAction, FinalizationDecision
+from hermes_cli.plugins import PluginContext, PluginManager, PluginManifest
 
 
 class FakeAgent:
@@ -128,6 +130,201 @@ def test_final_response_closes_tool_tail_before_persistence(monkeypatch):
     assert isinstance(result["messages"][-1]["timestamp"], float)
     assert agent.persisted_messages is not None
     assert agent.persisted_messages[-1] == result["messages"][-1]
+
+
+def test_required_policy_block_replaces_candidate_before_persistence(monkeypatch, tmp_path):
+    manager = PluginManager(scope_key=str(tmp_path / "home"))
+    context = PluginContext(PluginManifest(name="required", key="required"), manager)
+    context.register_finalization_policy(
+        id="design-completion",
+        callback=lambda _ctx: FinalizationDecision(
+            action=FinalizationAction.BLOCK,
+            policy_id="design-completion",
+            reason_code="validator_failed",
+            user_message="Final delivery blocked: design validation failed.",
+        ),
+    )
+    monkeypatch.setattr("hermes_cli.plugins.get_plugin_manager", lambda: manager)
+
+    agent = FakeAgent()
+    agent._response_was_previewed = False
+    agent._finalization_audit_path = tmp_path / "audit.jsonl"
+    messages = [
+        {"role": "user", "content": "finish it"},
+        {
+            "role": "assistant",
+            "content": "Candidate completion secret.",
+            "reasoning": "Candidate private reasoning.",
+            "reasoning_content": "Candidate provider reasoning.",
+        },
+    ]
+
+    result = finalize_turn(
+        agent,
+        final_response="Candidate completion secret.",
+        api_call_count=1,
+        interrupted=False,
+        failed=False,
+        messages=messages,
+        conversation_history=[],
+        effective_task_id="task",
+        turn_id="turn",
+        user_message="finish it",
+        original_user_message="finish it",
+        _should_review_memory=False,
+        _turn_exit_reason="text_response(28 chars)",
+    )
+
+    assert result["finalization"]["status"] == "blocked"
+    assert result["failed"] is True
+    assert result["completed"] is False
+    assert "Candidate completion secret" not in result["final_response"]
+    assert agent.persisted_messages[-1]["content"] == result["final_response"]
+    assert "reasoning" not in agent.persisted_messages[-1]
+    assert "reasoning_content" not in agent.persisted_messages[-1]
+
+
+def test_gated_allow_does_not_release_unhashed_reasoning(monkeypatch, tmp_path):
+    manager = PluginManager(scope_key=str(tmp_path / "home"))
+    context = PluginContext(PluginManifest(name="required", key="required"), manager)
+    context.register_finalization_policy(
+        id="test-required",
+        callback=lambda _ctx: FinalizationDecision(
+            action=FinalizationAction.ALLOW,
+            policy_id="test-required",
+            reason_code="validated",
+            user_message="",
+        ),
+    )
+    monkeypatch.setattr("hermes_cli.plugins.get_plugin_manager", lambda: manager)
+    monkeypatch.setattr("agent.runtime_cwd.resolve_context_cwd", lambda: str(tmp_path))
+    agent = FakeAgent()
+    agent._finalization_audit_path = tmp_path / "audit.jsonl"
+    messages = [
+        {"role": "user", "content": "finish it"},
+        {
+            "role": "assistant",
+            "content": "Approved response.",
+            "reasoning": "Unhashed private reasoning.",
+        },
+    ]
+
+    result = finalize_turn(
+        agent,
+        final_response="Approved response.",
+        api_call_count=1,
+        interrupted=False,
+        failed=False,
+        messages=messages,
+        conversation_history=[],
+        effective_task_id="task",
+        turn_id="turn",
+        user_message="finish it",
+        original_user_message="finish it",
+        _should_review_memory=False,
+        _turn_exit_reason="text_response",
+    )
+
+    assert result["finalization"]["status"] == "allowed", result["finalization"]
+    assert result["last_reasoning"] is None
+
+
+def test_missing_project_required_policy_blocks_before_persistence(monkeypatch, tmp_path):
+    import json
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        "hermes_cli.plugins.get_plugin_manager",
+        lambda: SimpleNamespace(iter_finalization_policies=lambda: ()),
+    )
+    (tmp_path / ".hermes").mkdir()
+    (tmp_path / ".hermes" / "enforcement.json").write_text(
+        json.dumps(
+            {"schema_version": 1, "required_policies": ["missing.policy"]}
+        ),
+        encoding="utf-8",
+    )
+    agent = FakeAgent()
+    agent.working_directory = str(tmp_path)
+    agent._finalization_audit_path = tmp_path / "audit.jsonl"
+    messages = [
+        {"role": "user", "content": "finish it"},
+        {"role": "assistant", "content": "candidate secret"},
+    ]
+
+    result = finalize_turn(
+        agent,
+        final_response="candidate secret",
+        api_call_count=1,
+        interrupted=False,
+        failed=False,
+        messages=messages,
+        conversation_history=[],
+        effective_task_id="task",
+        turn_id="turn",
+        user_message="finish it",
+        original_user_message="finish it",
+        _should_review_memory=False,
+        _turn_exit_reason="text_response",
+    )
+
+    assert "candidate secret" not in result["final_response"]
+    assert result["finalization"]["reason_code"] == "project_policy_requirement_failure"
+    assert agent.persisted_messages[-1]["content"] == result["final_response"]
+
+
+def test_project_requirement_forces_registered_optional_policy_fail_closed(
+    monkeypatch, tmp_path
+):
+    import json
+
+    manager = PluginManager(scope_key=str(tmp_path / "home"))
+    context = PluginContext(PluginManifest(name="optional", key="optional"), manager)
+
+    def broken_policy(_context):
+        raise RuntimeError("policy unavailable")
+
+    context.register_finalization_policy(
+        id="project.required",
+        callback=broken_policy,
+        required=False,
+    )
+    monkeypatch.setattr("hermes_cli.plugins.get_plugin_manager", lambda: manager)
+    (tmp_path / ".hermes").mkdir()
+    (tmp_path / ".hermes" / "enforcement.json").write_text(
+        json.dumps(
+            {"schema_version": 1, "required_policies": ["project.required"]}
+        ),
+        encoding="utf-8",
+    )
+    agent = FakeAgent()
+    agent.working_directory = str(tmp_path)
+    agent._turn_project_required_policy_ids = ("project.required",)
+    (tmp_path / ".hermes" / "enforcement.json").unlink()
+    agent._finalization_audit_path = tmp_path / "audit.jsonl"
+    messages = [
+        {"role": "user", "content": "finish it"},
+        {"role": "assistant", "content": "candidate secret"},
+    ]
+
+    result = finalize_turn(
+        agent,
+        final_response="candidate secret",
+        api_call_count=1,
+        interrupted=False,
+        failed=False,
+        messages=messages,
+        conversation_history=[],
+        effective_task_id="task",
+        turn_id="turn",
+        user_message="finish it",
+        original_user_message="finish it",
+        _should_review_memory=False,
+        _turn_exit_reason="text_response",
+    )
+
+    assert result["finalization"]["status"] == "blocked"
+    assert "candidate secret" not in result["final_response"]
 
 
 def test_fallback_timestamp_survives_delayed_sqlite_persistence(

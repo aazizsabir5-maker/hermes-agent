@@ -25,6 +25,7 @@ move-and-name refactor with no semantic change.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 import uuid
@@ -571,7 +572,78 @@ def build_turn_context(
     if isinstance(persist_user_message, str):
         persist_user_message = sanitize_surrogates(persist_user_message)
 
-    # Store stream callback for _interruptible_api_call to pick up.
+    # Store stream callback for _interruptible_api_call to pick up.  Required
+    # finalization policies buffer assistant text until the host gate has
+    # evaluated the complete response. Host-generated tool progress remains
+    # visible, while all model-authored text and reasoning are withheld.
+    try:
+        from agent.finalization_policy import (
+            policy_buffers_turn,
+            project_required_policy_ids,
+        )
+        from agent.runtime_cwd import resolve_context_cwd
+        from hermes_cli.plugins import get_plugin_manager
+
+        registered_policies = get_plugin_manager().iter_finalization_policies()
+        registered_ids = {policy.id for policy in registered_policies}
+        project_root = (
+            resolve_context_cwd()
+            or getattr(agent, "working_directory", None)
+            or os.getcwd()
+        )
+        required_ids = project_required_policy_ids(project_root) if project_root else ()
+        agent._turn_project_required_policy_ids = tuple(required_ids)
+        missing_ids = sorted(set(required_ids) - registered_ids)
+        startup_error = (
+            "missing required finalization policies: " + ", ".join(missing_ids)
+            if missing_ids
+            else None
+        )
+        active_ids = set(getattr(agent, "_active_finalization_policy_ids", ()) or ())
+        active_ids.update(required_ids)
+        for policy in registered_policies:
+            predicate = getattr(policy, "turn_predicate", None)
+            if policy.id in active_ids or predicate is None:
+                active_ids.add(policy.id)
+                continue
+            if project_root is None:
+                if policy.required:
+                    active_ids.add(policy.id)
+                    startup_error = startup_error or "project root unavailable"
+                continue
+            predicate_messages = [user_message]
+            for prior_message in reversed((conversation_history or [])[-20:]):
+                if (
+                    isinstance(prior_message, dict)
+                    and prior_message.get("role") == "user"
+                    and prior_message.get("content") != user_message
+                ):
+                    predicate_messages.append(prior_message.get("content"))
+            predicate_error = None
+            applies = False
+            for predicate_message in predicate_messages:
+                applies, predicate_error = policy_buffers_turn(
+                    policy, str(project_root), predicate_message
+                )
+                if applies or predicate_error:
+                    break
+            if applies:
+                active_ids.add(policy.id)
+            if predicate_error and policy.required:
+                startup_error = startup_error or (
+                    "finalization policy applicability failed: " + predicate_error
+                )
+        agent._active_finalization_policy_ids = tuple(sorted(active_ids))
+        agent._finalization_policy_startup_error = startup_error
+        agent._finalization_buffering_required = bool(
+            active_ids or required_ids or missing_ids
+        )
+    except Exception as exc:
+        # A present but unreadable project requirement must never silently
+        # become an unprotected turn.
+        agent._finalization_policy_startup_error = str(exc) or type(exc).__name__
+        agent._turn_project_required_policy_ids = ()
+        agent._finalization_buffering_required = True
     agent._stream_callback = stream_callback
     agent._persist_user_message_idx = None
     agent._persist_user_message_override = persist_user_message

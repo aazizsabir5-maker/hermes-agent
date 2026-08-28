@@ -2007,6 +2007,32 @@ def run_conversation(
     # See agent/transports/codex_app_server_session.py for the adapter
     # and references/codex-app-server-runtime.md for the rationale.
     if agent.api_mode == "codex_app_server":
+        if getattr(agent, "_finalization_buffering_required", False):
+            from agent.finalization_policy import DEFAULT_BLOCK_MESSAGE
+
+            agent._finalization_policy_startup_error = (
+                "codex app-server runtime cannot provide the local "
+                "required-policy finalization boundary"
+            )
+            return finalize_turn(
+                agent,
+                final_response=DEFAULT_BLOCK_MESSAGE,
+                api_call_count=api_call_count,
+                interrupted=False,
+                failed=True,
+                messages=messages,
+                conversation_history=conversation_history,
+                effective_task_id=effective_task_id,
+                turn_id=turn_id,
+                user_message=user_message,
+                original_user_message=original_user_message,
+                _should_review_memory=_should_review_memory,
+                _turn_exit_reason="required_policy_runtime_unsupported",
+                _pending_verification_response=_pending_verification_response,
+                _pending_verification_response_previewed=(
+                    _pending_verification_response_previewed
+                ),
+            )
         return agent._run_codex_app_server_turn(
             user_message=user_message,
             original_user_message=original_user_message,
@@ -3617,6 +3643,11 @@ def run_conversation(
                     # channel; fall back to it so the user sees *something*.
                     if not _refusal_text:
                         _refusal_text = (agent._extract_reasoning(_refusal_result) or "").strip()
+                    _refusal_visible_text = (
+                        ""
+                        if getattr(agent, "_finalization_buffering_required", False)
+                        else _refusal_text
+                    )
 
                     agent._invoke_api_request_error_hook(
                         task_id=effective_task_id,
@@ -3626,7 +3657,10 @@ def run_conversation(
                         api_start_time=api_start_time,
                         api_kwargs=api_kwargs,
                         error_type="ContentPolicyBlocked",
-                        error_message=_refusal_text or "model declined to respond (content_filter)",
+                        error_message=(
+                            _refusal_visible_text
+                            or "model declined to respond (content_filter)"
+                        ),
                         status_code=None,
                         retry_count=retry_count,
                         max_retries=max_retries,
@@ -3658,9 +3692,9 @@ def run_conversation(
 
                     agent._flush_status_buffer()
                     _refusal_log = (
-                        _refusal_text[:500] + "..."
-                        if len(_refusal_text) > 500
-                        else _refusal_text
+                        _refusal_visible_text[:500] + "..."
+                        if len(_refusal_visible_text) > 500
+                        else _refusal_visible_text
                     )
                     logger.warning(
                         "%sModel declined to respond (finish_reason=content_filter). "
@@ -3683,6 +3717,14 @@ def run_conversation(
                         f"{_refusal_detail}\n\n"
                         f"{_CONTENT_POLICY_RECOVERY_HINT}"
                     )
+
+                    if getattr(agent, "_finalization_buffering_required", False):
+                        final_response = (
+                            "The model declined this request under its content policy."
+                        )
+                        failed = True
+                        _turn_exit_reason = "content_policy_blocked"
+                        break
 
                     agent._cleanup_task_resources(effective_task_id)
                     agent._persist_session(messages, conversation_history)
@@ -3998,16 +4040,29 @@ def run_conversation(
                                     "finish_reason": "length",
                                 })
                             agent._session_messages = messages
-                            agent._cleanup_task_resources(effective_task_id)
-                            agent._persist_session(messages, conversation_history)
-                            return {
-                                "final_response": partial_response or None,
-                                "messages": messages,
-                                "api_calls": api_call_count,
-                                "completed": False,
-                                "partial": True,
-                                "error": "Response remained truncated after 4 continuation attempts",
-                            }
+                            _partial_result = finalize_turn(
+                                agent,
+                                final_response=partial_response or None,
+                                api_call_count=api_call_count,
+                                interrupted=interrupted,
+                                failed=False,
+                                messages=messages,
+                                conversation_history=conversation_history,
+                                effective_task_id=effective_task_id,
+                                turn_id=turn_id,
+                                user_message=user_message,
+                                original_user_message=original_user_message,
+                                _should_review_memory=_should_review_memory,
+                                _turn_exit_reason="partial_stream_recovery",
+                                _pending_verification_response=_pending_verification_response,
+                                _pending_verification_response_previewed=_pending_verification_response_previewed,
+                            )
+                            _partial_result["partial"] = True
+                            _partial_result["completed"] = False
+                            _partial_result["error"] = (
+                                "Response remained truncated after 4 continuation attempts"
+                            )
+                            return _partial_result
 
                     if agent.api_mode in {"chat_completions", "bedrock_converse", "anthropic_messages"}:
                         assistant_message = _trunc_msg
@@ -6836,7 +6891,11 @@ def run_conversation(
                 pass
 
             # Handle assistant response
-            if assistant_message.content and not agent.quiet_mode:
+            if (
+                assistant_message.content
+                and not agent.quiet_mode
+                and not getattr(agent, "_finalization_buffering_required", False)
+            ):
                 if agent.verbose_logging:
                     agent._vprint(f"{agent.log_prefix}🤖 Assistant: {assistant_message.content}")
                 else:
@@ -6844,7 +6903,11 @@ def run_conversation(
 
             # Notify progress callback of model's thinking (used by subagent
             # delegation to relay the child's reasoning to the parent display).
-            if (assistant_message.content and agent.tool_progress_callback):
+            if (
+                assistant_message.content
+                and agent.tool_progress_callback
+                and not getattr(agent, "_finalization_buffering_required", False)
+            ):
                 _think_text = assistant_message.content.strip()
                 # Strip reasoning XML tags that shouldn't leak to parent display
                 _think_text = re.sub(
@@ -7102,7 +7165,10 @@ def run_conversation(
 
                     # Return helpful error to model — model can agent-correct next turn
                     invalid_name = invalid_tool_calls[0]
-                    invalid_preview = invalid_name[:80] + "..." if len(invalid_name) > 80 else invalid_name
+                    if getattr(agent, "_finalization_buffering_required", False):
+                        invalid_preview = "[redacted invalid tool]"
+                    else:
+                        invalid_preview = invalid_name[:80] + "..." if len(invalid_name) > 80 else invalid_name
                     agent._buffer_vprint(f"⚠️  Unknown tool '{invalid_preview}' — sending error to model for agent-correction ({agent._invalid_tool_retries}/3)")
 
                     if agent._invalid_tool_retries >= 3:
@@ -7115,17 +7181,39 @@ def run_conversation(
                         # interrupt aborts (#48879 / #52592) so the next user
                         # turn is not tool→user for strict providers.
                         close_interrupted_tool_sequence(messages, _final_response)
-                        agent._persist_session(messages, conversation_history)
-                        return {
-                            "final_response": _final_response,
-                            "messages": messages,
-                            "api_calls": api_call_count,
-                            "completed": False,
-                            "partial": True,
-                            "error": _final_response
-                        }
+                        _invalid_result = finalize_turn(
+                            agent,
+                            final_response=_final_response,
+                            api_call_count=api_call_count,
+                            interrupted=interrupted,
+                            failed=False,
+                            messages=messages,
+                            conversation_history=conversation_history,
+                            effective_task_id=effective_task_id,
+                            turn_id=turn_id,
+                            user_message=user_message,
+                            original_user_message=original_user_message,
+                            _should_review_memory=_should_review_memory,
+                            _turn_exit_reason="invalid_tool_call_exhausted",
+                            _pending_verification_response=(
+                                _pending_verification_response
+                            ),
+                            _pending_verification_response_previewed=(
+                                _pending_verification_response_previewed
+                            ),
+                        )
+                        _invalid_result["partial"] = True
+                        _invalid_result["completed"] = False
+                        _invalid_result["error"] = _invalid_result["final_response"]
+                        return _invalid_result
 
+                    if getattr(agent, "_finalization_buffering_required", False):
+                        for tc in assistant_message.tool_calls:
+                            if tc.function.name not in agent.valid_tool_names:
+                                tc.function.name = "invalid_tool"
+                                tc.function.arguments = "{}"
                     assistant_msg = agent._build_assistant_message(assistant_message, finish_reason)
+                    agent._redact_buffered_interim_assistant_message(assistant_msg)
                     append_message(messages, assistant_msg)
                     for tc in assistant_message.tool_calls:
                         _tc_name = tc.function.name
@@ -7366,6 +7454,7 @@ def run_conversation(
                 # stall independently rather than capping the whole run.
                 agent._dropped_toolcall_retries = 0
 
+                agent._redact_buffered_interim_assistant_message(assistant_msg)
                 previous_msg = messages[-1] if messages else None
                 current_interim_visible = agent._interim_assistant_visible_text(assistant_msg)
                 previous_interim_visible = (
@@ -8408,15 +8497,18 @@ def run_conversation(
                 # Unlike the tool-call exit, failure must NOT abort the turn:
                 # no side effect follows and _persist_session retries the write.
                 # Full incident narrative: tests/run_agent/test_81641_*.py.
-                try:
-                    agent._flush_messages_to_session_db(messages, conversation_history)
-                except Exception:
-                    logger.warning(
-                        "final text-turn flush failed (session=%s) — reply is "
-                        "not yet durable; relying on finalize_turn retry",
-                        getattr(agent, "session_id", None) or "none",
-                        exc_info=True,
-                    )
+                if not getattr(agent, "_finalization_buffering_required", False):
+                    try:
+                        agent._flush_messages_to_session_db(
+                            messages, conversation_history
+                        )
+                    except Exception:
+                        logger.warning(
+                            "final text-turn flush failed (session=%s) — reply is "
+                            "not yet durable; relying on finalize_turn retry",
+                            getattr(agent, "session_id", None) or "none",
+                            exc_info=True,
+                        )
 
                 _turn_exit_reason = f"text_response(finish_reason={finish_reason})"
                 if not agent.quiet_mode:

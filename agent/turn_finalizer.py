@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import replace
+from pathlib import Path
 
 from agent.codex_responses_adapter import _summarize_user_message_for_log
 from agent.context_compressor import _DB_PERSISTED_MARKER
@@ -55,6 +57,209 @@ _VERIFICATION_CONTINUATION_FLAGS = (
     "_verification_stop_synthetic",
     "_pre_verify_synthetic",
 )
+
+
+def _prepare_and_gate_final_response(
+    agent,
+    *,
+    final_response,
+    interrupted,
+    turn_exit_reason,
+    preserved_verification_fallback,
+    effective_task_id,
+    turn_id,
+    original_user_message,
+    logger,
+):
+    """Apply final transforms and required host policies before persistence."""
+    response_transformed = False
+    pre_transform_response = None
+
+    if final_response and not interrupted:
+        try:
+            failed_mutations = getattr(agent, "_turn_failed_file_mutations", None) or {}
+            if failed_mutations and agent._file_mutation_verifier_enabled():
+                footer = agent._format_file_mutation_failure_footer(failed_mutations)
+                if footer:
+                    final_response = final_response.rstrip() + "\n\n" + footer
+        except Exception as exc:
+            logger.debug("file-mutation verifier footer failed: %s", exc)
+
+    if not interrupted:
+        try:
+            if agent._turn_completion_explainer_enabled():
+                stripped = (final_response or "").strip()
+                empty_terminal = stripped == "" or stripped == "(empty)"
+                partial_fragment = (
+                    not empty_terminal
+                    and not preserved_verification_fallback
+                    and not str(turn_exit_reason).startswith("text_response")
+                    and len(stripped) <= 24
+                    and stripped[-1:] not in {".", "!", "?", "。", "！", "？", "`", ")"}
+                )
+                partial_stream = str(turn_exit_reason) == "partial_stream_recovery"
+                if empty_terminal or partial_fragment or partial_stream:
+                    explanation = agent._format_turn_completion_explanation(
+                        turn_exit_reason,
+                        getattr(agent, "_last_persistence_error_cause", None),
+                    )
+                    if explanation:
+                        final_response = (
+                            explanation
+                            if empty_terminal
+                            else stripped + "\n\n" + explanation
+                        )
+        except Exception as exc:
+            logger.debug("turn-completion explainer failed: %s", exc)
+
+    if final_response and not interrupted:
+        try:
+            from hermes_cli.lifecycle import invoke_hook
+
+            for hook_result in invoke_hook(
+                "transform_llm_output",
+                response_text=final_response,
+                session_id=agent.session_id or "",
+                model=agent.model,
+                platform=getattr(agent, "platform", None) or "",
+            ):
+                if isinstance(hook_result, str) and hook_result:
+                    pre_transform_response = final_response
+                    final_response = hook_result
+                    response_transformed = True
+                    break
+        except Exception as exc:
+            logger.warning("transform_llm_output hook failed: %s", exc)
+
+    if isinstance(final_response, str):
+        final_response = _sanitize_surrogates(final_response)
+
+    gate_result = None
+    if final_response and not interrupted:
+        try:
+            from agent.finalization_gate import apply_finalization_gate
+            from agent.finalization_policy import FinalizationContext
+            from hermes_cli.plugins import get_plugin_manager
+            from hermes_constants import get_hermes_home
+
+            policies = list(get_plugin_manager().iter_finalization_policies())
+            active_policy_ids = getattr(
+                agent, "_active_finalization_policy_ids", None
+            )
+            if active_policy_ids is not None:
+                active_policy_ids = set(active_policy_ids)
+                policies = [
+                    policy for policy in policies if policy.id in active_policy_ids
+                ]
+            from agent.runtime_cwd import resolve_context_cwd
+
+            resolved_context_root = resolve_context_cwd()
+            project_root = Path(
+                resolved_context_root
+                or getattr(agent, "working_directory", None)
+                or os.getcwd()
+            ).expanduser().resolve(strict=True)
+            requirement_error = getattr(
+                agent, "_finalization_policy_startup_error", None
+            )
+            try:
+                from agent.finalization_policy import project_required_policy_ids
+
+                required_ids = project_required_policy_ids(project_root)
+                required_id_set = set(required_ids) | set(
+                    getattr(agent, "_turn_project_required_policy_ids", ()) or ()
+                )
+                policies = [
+                    replace(policy, required=True)
+                    if policy.id in required_id_set and not policy.required
+                    else policy
+                    for policy in policies
+                ]
+                registered_ids = {policy.id for policy in policies}
+                missing_ids = sorted(required_id_set - registered_ids)
+                if missing_ids:
+                    requirement_error = (
+                        "missing required finalization policies: "
+                        + ", ".join(missing_ids)
+                    )
+            except Exception as exc:
+                requirement_error = str(exc) or type(exc).__name__
+
+            if requirement_error:
+                from agent.finalization_policy import (
+                    FinalizationAction,
+                    FinalizationDecision,
+                    RegisteredFinalizationPolicy,
+                )
+
+                def _block_requirement(_context):
+                    return FinalizationDecision(
+                        FinalizationAction.BLOCK,
+                        "core.project-requirements",
+                        "project_policy_requirement_failure",
+                        "Final delivery blocked: required project finalization policy enforcement is unavailable.",
+                        {"requirements_satisfied": False},
+                    )
+
+                policies.append(
+                    RegisteredFinalizationPolicy(
+                        id="core.project-requirements",
+                        callback=_block_requirement,
+                        required=True,
+                        timeout_seconds=1.0,
+                        owner="core",
+                    )
+                )
+            if policies:
+                context = FinalizationContext.for_response(
+                    session_id=agent.session_id or "",
+                    task_id=effective_task_id,
+                    turn_id=turn_id,
+                    platform=getattr(agent, "platform", None) or "",
+                    model=agent.model,
+                    project_root=str(project_root),
+                    user_message=original_user_message,
+                    response_text=final_response,
+                    changed_paths=tuple(
+                        sorted((getattr(agent, "_turn_file_mutations", None) or {}).keys())
+                    ),
+                    loaded_skills=tuple(getattr(agent, "_required_policy_skills", ()) or ()),
+                    mode=str(getattr(agent, "_finalization_mode", "working")),
+                    metadata={
+                        "active_policy_ids": tuple(active_policy_ids or ()),
+                        "project_required_policy_ids_at_turn_start": tuple(
+                            getattr(agent, "_turn_project_required_policy_ids", ()) or ()
+                        ),
+                    },
+                )
+                audit_path = getattr(agent, "_finalization_audit_path", None)
+                if audit_path is None:
+                    audit_path = get_hermes_home() / "enforcement" / "finalization-audit.jsonl"
+                gate_result = apply_finalization_gate(
+                    context,
+                    policies,
+                    audit_path=audit_path,
+                )
+                final_response = gate_result.response_text
+        except Exception:
+            logger.error("required finalization policy engine failed", exc_info=True)
+            final_response = (
+                "Final delivery blocked: required finalization policy evaluation failed."
+            )
+            from types import SimpleNamespace
+            gate_result = SimpleNamespace(
+                applied=True,
+                allowed=False,
+                reason_code="policy_engine_failure",
+                response_sha256="",
+                audit_id=None,
+                decisions=(),
+            )
+
+    if gate_result is not None:
+        # Never expose a pre-gate/pre-transform candidate through result metadata.
+        pre_transform_response = None
+    return final_response, response_transformed, pre_transform_response, gate_result
 
 
 def _record_kanban_budget_exhausted(
@@ -233,6 +438,53 @@ def finalize_turn(
             or normal_text_response
         )
     )
+
+    # Final transforms and required release policies must run before session
+    # persistence.  This guarantees a denied candidate is neither delivered
+    # nor stored as the durable assistant answer.
+    (
+        final_response,
+        _response_transformed,
+        _pre_transform_response,
+        _finalization_result,
+    ) = _prepare_and_gate_final_response(
+        agent,
+        final_response=final_response,
+        interrupted=interrupted,
+        turn_exit_reason=_turn_exit_reason,
+        preserved_verification_fallback=preserved_verification_fallback,
+        effective_task_id=effective_task_id,
+        turn_id=turn_id,
+        original_user_message=original_user_message,
+        logger=logger,
+    )
+    if _finalization_result is not None and not _finalization_result.allowed:
+        completed = False
+        failed = True
+        _turn_exit_reason = "required_finalization_policy_blocked"
+
+    # If the loop already appended its candidate assistant row, replace that
+    # current-turn row with the host-approved/block response before persistence.
+    if final_response and not interrupted and messages:
+        for _message in reversed(messages):
+            if not isinstance(_message, dict):
+                continue
+            if _message.get("role") == "user":
+                break
+            if _message.get("role") == "assistant" and not _message.get("tool_calls"):
+                _message["content"] = final_response
+                if _finalization_result is not None:
+                    for _candidate_field in (
+                        "reasoning",
+                        "reasoning_content",
+                        "reasoning_details",
+                        "codex_message_items",
+                        "codex_reasoning_items",
+                    ):
+                        _message.pop(_candidate_field, None)
+                _message.pop(_DB_PERSISTED_MARKER, None)
+                agent._db_flush_scan_prefix = None
+                break
 
     # Preflight can seed the display count before the provider receives the
     # request. Roll that estimate back only when an interrupt wins the race
@@ -512,115 +764,6 @@ def finalize_turn(
     else:
         logger.info(_diag_msg, *_diag_args)
 
-    # File-mutation verifier footer.
-    # If one or more ``write_file`` / ``patch`` calls failed during this
-    # turn and were never superseded by a successful write to the same
-    # path, append an advisory footer to the assistant response.  This
-    # catches the specific case — reported by Ben Eng (#15524-adjacent)
-    # — where a model issues a batch of parallel patches, half of them
-    # fail with "Could not find old_string", and the model summarises
-    # the turn claiming every file was edited.  The user then has to
-    # manually run ``git status`` to catch the lie.  With this footer
-    # the truth is surfaced on every turn, so over-claiming is
-    # structurally impossible past the model.
-    #
-    # Gate: only applied when a real text response exists for this
-    # turn and the user didn't interrupt.  Empty/interrupted turns
-    # already have other surface text that shouldn't be augmented.
-    if final_response and not interrupted:
-        try:
-            _failed = getattr(agent, "_turn_failed_file_mutations", None) or {}
-            if _failed and agent._file_mutation_verifier_enabled():
-                footer = agent._format_file_mutation_failure_footer(_failed)
-                if footer:
-                    final_response = final_response.rstrip() + "\n\n" + footer
-        except Exception as _ver_err:
-            logger.debug("file-mutation verifier footer failed: %s", _ver_err)
-
-    # Turn-completion explainer.
-    # When a turn ends abnormally after substantive work — empty content
-    # after retries, a partial/truncated stream, a still-pending tool
-    # result, or an iteration/budget limit — the user otherwise gets a
-    # blank or fragmentary response box with no consolidated reason why
-    # the agent stopped (#34452).  Surface a single user-visible
-    # explanation derived from ``_turn_exit_reason``, mirroring the
-    # file-mutation verifier footer pattern above.
-    #
-    # Gate carefully so healthy turns stay quiet:
-    #   - ``text_response(...)`` exits never produce an explanation
-    #     (handled inside the formatter), so a terse ``Done.`` is silent.
-    #   - We only ACT when there is no genuinely usable reply this turn:
-    #     an empty response, the "(empty)" terminal sentinel, or a
-    #     suspiciously short partial fragment with no terminating
-    #     punctuation (e.g. "The").  A real short answer keeps its text.
-    if not interrupted:
-        try:
-            if agent._turn_completion_explainer_enabled():
-                _stripped = (final_response or "").strip()
-                _is_empty_terminal = _stripped == "" or _stripped == "(empty)"
-                # A short fragment that is not a normal text_response exit
-                # and lacks sentence-ending punctuation is treated as a
-                # truncated partial (the "The" case from #34452).
-                _is_partial_fragment = (
-                    not _is_empty_terminal
-                    and not preserved_verification_fallback
-                    and not str(_turn_exit_reason).startswith("text_response")
-                    and len(_stripped) <= 24
-                    and _stripped[-1:] not in {".", "!", "?", "。", "！", "？", "`", ")"}
-                )
-                _is_partial_stream_recovery = (
-                    str(_turn_exit_reason) == "partial_stream_recovery"
-                )
-                if (
-                    _is_empty_terminal
-                    or _is_partial_fragment
-                    or _is_partial_stream_recovery
-                ):
-                    _explanation = agent._format_turn_completion_explanation(
-                        _turn_exit_reason,
-                        getattr(agent, "_last_persistence_error_cause", None),
-                    )
-                    if _explanation:
-                        if _is_empty_terminal:
-                            # Replace the bare "(empty)"/blank sentinel with
-                            # the actionable explanation.
-                            final_response = _explanation
-                        else:
-                            # Keep the partial fragment, append the reason so
-                            # the user sees both what arrived and why it
-                            # stopped.
-                            final_response = (
-                                _stripped + "\n\n" + _explanation
-                            )
-        except Exception as _exp_err:
-            logger.debug("turn-completion explainer failed: %s", _exp_err)
-
-    _response_transformed = False
-    _pre_transform_response = None
-
-    # Plugin hook: transform_llm_output
-    # Fired once per turn after the tool-calling loop completes.
-    # Plugins can transform the LLM's output text before it's returned.
-    # First hook to return a string wins; None/empty return leaves text unchanged.
-    if final_response and not interrupted:
-        try:
-            from hermes_cli.lifecycle import invoke_hook as _invoke_hook
-            _transform_results = _invoke_hook(
-                "transform_llm_output",
-                response_text=final_response,
-                session_id=agent.session_id or "",
-                model=agent.model,
-                platform=getattr(agent, "platform", None) or "",
-            )
-            for _hook_result in _transform_results:
-                if isinstance(_hook_result, str) and _hook_result:
-                    _pre_transform_response = final_response
-                    final_response = _hook_result
-                    _response_transformed = True
-                    break  # First non-empty string wins
-        except Exception as exc:
-            logger.warning("transform_llm_output hook failed: %s", exc)
-
     # Plugin hook: post_llm_call
     # Fired once per turn after the tool-calling loop completes.
     # Plugins can use this to persist conversation data (e.g. sync
@@ -680,24 +823,19 @@ def finalize_turn(
     # with reasoning=None, so picking only the last assistant would
     # silently drop legitimate same-turn reasoning.
     last_reasoning = None
-    for msg in reversed(messages):
-        if msg.get("role") == "user":
-            break  # turn boundary — don't cross into prior turns
-        if msg.get("role") == "assistant" and msg.get("reasoning"):
-            last_reasoning = msg["reasoning"]
-            break
+    if _finalization_result is None:
+        for msg in reversed(messages):
+            if msg.get("role") == "user":
+                break  # turn boundary — don't cross into prior turns
+            if msg.get("role") == "assistant" and msg.get("reasoning"):
+                last_reasoning = msg["reasoning"]
+                break
 
-    # Class-level surrogate chokepoint (#80366, #55143, #55309, #19819):
-    # ``final_response`` is often the RAW SDK content
-    # (``assistant_message.content``), not the sanitized copy stored in
-    # history by ``build_assistant_message``. Any lone UTF-16 surrogate
-    # (U+D800–U+DFFF) in it crashes downstream consumers — oneshot stdout
-    # writes, Telegram's ``utf16_len`` length check, Signal formatting,
-    # JSON envelope encodes — on every provider (Ollama, NVIDIA NIM, …).
-    # Scrub once here, where model text leaves the conversation loop, so
-    # every delivery surface receives valid Unicode.
-    if isinstance(final_response, str):
-        final_response = _sanitize_surrogates(final_response)
+    if getattr(agent, "_finalization_buffering_required", False):
+        # Candidate text was intentionally withheld; every delivery surface
+        # must send the post-gate response instead of trusting preview flags
+        # set by provider-specific fallback paths.
+        agent._response_was_previewed = False
 
     # Build result with interrupt info if applicable
     result = {
@@ -735,6 +873,26 @@ def finalize_turn(
         ).get("service_tier"),
         "session_id": agent.session_id,
     }
+    if _finalization_result is not None:
+        result["finalization"] = {
+            "status": "allowed" if _finalization_result.allowed else "blocked",
+            "reason_code": _finalization_result.reason_code,
+            "response_sha256": _finalization_result.response_sha256,
+            "candidate_response_sha256": getattr(
+                _finalization_result,
+                "candidate_response_sha256",
+                _finalization_result.response_sha256,
+            ),
+            "audit_id": _finalization_result.audit_id,
+            "policies": [
+                {
+                    "policy_id": decision.policy_id,
+                    "action": decision.action.value,
+                    "reason_code": decision.reason_code,
+                }
+                for decision in _finalization_result.decisions
+            ],
+        }
     if agent._tool_guardrail_halt_decision is not None:
         result["guardrail"] = agent._tool_guardrail_halt_decision.to_metadata()
     # Persistence failures already set failed=True + an explanation in

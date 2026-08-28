@@ -159,6 +159,18 @@ _install_plugin_debug_handler()
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
+TRUSTED_BUNDLED_POLICY_PLUGIN_KEYS = frozenset({"policies/design_enforcement"})
+
+
+def _record_manifest_winner(winners: Dict[str, Any], manifest: Any) -> None:
+    """Record a manifest without allowing trusted policy-key shadowing."""
+    key = manifest.key or manifest.name
+    if key in TRUSTED_BUNDLED_POLICY_PLUGIN_KEYS and manifest.source != "bundled":
+        logger.warning(
+            "Ignoring non-bundled override for trusted policy plugin '%s'", key
+        )
+        return
+    winners[key] = manifest
 
 VALID_HOOKS: Set[str] = {
     "pre_tool_call",
@@ -557,9 +569,9 @@ def _classify_entrypoint_value_kind(value: str) -> str:
 # hooks. They become high-trust prompt bytes and are charged on every turn.
 SYSTEM_PROMPT_SECTION_POSITIONS = frozenset({"after_memory"})
 DEFAULT_SYSTEM_PROMPT_SECTION_MAX_CHARS = 4_000
-MAX_SYSTEM_PROMPT_SECTION_CHARS = 4_000
+MAX_SYSTEM_PROMPT_SECTION_CHARS = 40_000
 MAX_SYSTEM_PROMPT_SECTIONS = 32
-MAX_SYSTEM_PROMPT_SECTIONS_TOTAL_CHARS = 8_000
+MAX_SYSTEM_PROMPT_SECTIONS_TOTAL_CHARS = 48_000
 _SYSTEM_PROMPT_SECTION_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
 _SYSTEM_PROMPT_SECTION_HEADING_PREFIX = "## Plugin Context: "
 PLUGIN_SECTIONS_START = "<!-- hermes-plugin-sections:start -->"
@@ -3399,6 +3411,51 @@ class PluginContext:
         logger.debug("Plugin %s registered hook: %s", self.manifest.name, hook_name)
         return handle
 
+    def register_finalization_policy(
+        self,
+        *,
+        id: str,
+        callback: Callable,
+        required: bool = True,
+        timeout_seconds: float = 30.0,
+        turn_predicate: Optional[Callable[[str, Any], bool]] = None,
+    ) -> PluginRegistration:
+        """Register a typed response-release policy.
+
+        Unlike lifecycle hooks, required finalization policies are evaluated
+        fail closed by the agent core.  A callback must return a
+        :class:`agent.finalization_policy.FinalizationDecision` whose
+        ``policy_id`` matches *id*.
+        """
+        if not isinstance(id, str) or not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,127}", id):
+            raise ValueError(
+                "finalization policy id must be 1-128 lowercase characters "
+                "using letters, numbers, '.', '_', or '-'"
+            )
+        from agent.finalization_policy import RegisteredFinalizationPolicy
+
+        policy = RegisteredFinalizationPolicy(
+            id=id,
+            callback=callback,
+            required=required,
+            timeout_seconds=timeout_seconds,
+            owner=self.plugin_id,
+            turn_predicate=turn_predicate,
+        )
+        if id in self._manager._finalization_policies:
+            existing = self._manager._finalization_policies[id]
+            raise ValueError(
+                f"finalization policy {id!r} is already registered by "
+                f"{existing.owner!r}"
+            )
+        self._manager._finalization_policies[id] = policy
+
+        def release() -> None:
+            if self._manager._finalization_policies.get(id) is policy:
+                self._manager._finalization_policies.pop(id, None)
+
+        return self._track("finalization_policy", id, release)
+
     def register_system_prompt_section(
         self,
         id: str,
@@ -3737,6 +3794,7 @@ class PluginManager:
         self._discovery_lock = threading.RLock()
         self._plugins: Dict[str, LoadedPlugin] = {}
         self._hooks: Dict[str, List[Callable]] = {}
+        self._finalization_policies: Dict[str, Any] = {}
         self._middleware: Dict[str, List[Callable]] = {}
         self._plugin_tool_names: Set[str] = set()
         self._plugin_platform_names: Set[str] = set()
@@ -4030,11 +4088,13 @@ class PluginManager:
     ) -> bool:
         """Unload registrations while excluding discovery/deferred loading."""
         with self._discovery_lock, _plugin_home_scope(self.home_path):
-            return self._unload_scoped(plugin)
+            return self._unload_scoped(plugin, preserve_trusted=True)
 
     def _unload_scoped(
         self,
         plugin: Union[str, PluginManifest, LoadedPlugin, None] = None,
+        *,
+        preserve_trusted: bool = False,
     ) -> bool:
         """Unload one plugin or all plugins owned by this manager.
 
@@ -4087,6 +4147,14 @@ class PluginManager:
                 for registration in self._ownership_ledger.get(key, [])
                 if registration.persistent and registration.active
             )
+
+        if preserve_trusted:
+            target_keys.difference_update(TRUSTED_BUNDLED_POLICY_PLUGIN_KEYS)
+            registrations = [
+                registration
+                for registration in registrations
+                if registration.plugin_key not in TRUSTED_BUNDLED_POLICY_PLUGIN_KEYS
+            ]
 
         found = bool(target_keys or registrations)
         self._dispose_registrations(registrations)
@@ -4226,7 +4294,7 @@ class PluginManager:
             if force:
                 # The ledger owns teardown.  Clearing manager-local containers by
                 # itself leaves process-global tools/platforms/providers installed.
-                self.unload()
+                self._unload_scoped()
             if env_var_enabled("HERMES_SAFE_MODE"):
                 logger.info("HERMES_SAFE_MODE=1 — plugin discovery skipped")
                 self._discovered = True
@@ -4357,7 +4425,7 @@ class PluginManager:
             )
         winners: Dict[str, PluginManifest] = {}
         for manifest in manifests:
-            winners[manifest.key or manifest.name] = manifest
+            _record_manifest_winner(winners, manifest)
         # Standalone/user plugins that pass the gates below are collected
         # here and loaded AFTER the sweep in dependency-respecting order
         # (requires_plugins topological sort, #64165).
@@ -4385,9 +4453,13 @@ class PluginManager:
                 )
                 continue
 
-            # Explicit disable always wins (matches on key or on legacy
-            # bare name for back-compat with existing user configs).
-            if lookup_key in disabled or manifest.name in disabled:
+            # Explicit disable normally wins. Trusted bundled policy plugins
+            # are host-owned enforcement and cannot be disabled by user/project
+            # configuration.
+            if (
+                lookup_key not in TRUSTED_BUNDLED_POLICY_PLUGIN_KEYS
+                and (lookup_key in disabled or manifest.name in disabled)
+            ):
                 loaded = LoadedPlugin(manifest=manifest, enabled=False)
                 loaded.error = "disabled via config"
                 self._plugins[lookup_key] = loaded
@@ -5888,6 +5960,10 @@ class PluginManager:
     def has_hook(self, hook_name: str) -> bool:
         """Return True when at least one callback is registered for a hook."""
         return bool(self._hooks.get(hook_name))
+
+    def iter_finalization_policies(self) -> tuple[Any, ...]:
+        """Return a stable registration-order snapshot of release policies."""
+        return tuple(self._finalization_policies.values())
 
     def iter_hook_callbacks(self, hook_name: str) -> tuple[Callable, ...]:
         """Return a stable snapshot of callbacks registered for a hook."""

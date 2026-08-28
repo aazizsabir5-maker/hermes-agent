@@ -6575,6 +6575,20 @@ class AIAgent:
 
     def _reset_stream_delivery_tracking(self) -> None:
         """Reset tracking for text delivered during the current model response."""
+        if getattr(self, "_finalization_buffering_required", False):
+            # Reset scrubber state but never flush model-generated tail bytes to
+            # callbacks before required policies approve the complete response.
+            for scrubber in (
+                getattr(self, "_stream_think_scrubber", None),
+                getattr(self, "_stream_context_scrubber", None),
+            ):
+                if scrubber is not None:
+                    try:
+                        scrubber.flush()
+                    except Exception:
+                        pass
+            self._current_streamed_assistant_text = ""
+            return
         # Flush any benign partial-tag tail held by the think scrubber
         # first (#17924): an innocent '<' at the end of the stream that
         # turned out not to be a tag prefix should reach the UI.  Then
@@ -6616,6 +6630,8 @@ class AIAgent:
 
     def _record_streamed_assistant_text(self, text: str) -> None:
         """Accumulate visible assistant text emitted through stream callbacks."""
+        if getattr(self, "_finalization_buffering_required", False):
+            return
         # Single-writer guard (#65991): a superseded stream must not pollute the
         # turn's accumulated text (which also feeds the interim-visible-text
         # de-dup comparison), even when a caller reaches this directly (the
@@ -6742,6 +6758,8 @@ class AIAgent:
 
     def _fire_streamed_codex_commentary(self, text: str) -> None:
         """Deliver a completed live Codex commentary message immediately."""
+        if getattr(self, "_finalization_buffering_required", False):
+            return
         cb = getattr(self, "interim_assistant_callback", None)
         if cb is None or not isinstance(text, str):
             return
@@ -6769,6 +6787,8 @@ class AIAgent:
         when the only streamed text was unrelated mid-turn commentary. (#65919
         review: response-loss blocker)
         """
+        if getattr(self, "_finalization_buffering_required", False):
+            return
         if not isinstance(assistant_msg, dict):
             return
         commentary_parts = self._extract_codex_interim_visible_parts(assistant_msg)
@@ -6824,6 +6844,17 @@ class AIAgent:
                 self._record_delivered_interim_text(visible)
         except Exception:
             logger.debug("interim_assistant_callback error", exc_info=True)
+
+    def _redact_buffered_interim_assistant_message(
+        self, assistant_msg: Dict[str, Any]
+    ) -> None:
+        """Keep tool-call structure while removing unapproved model text."""
+        if not getattr(self, "_finalization_buffering_required", False):
+            return
+        assistant_msg["content"] = ""
+        assistant_msg.pop("reasoning", None)
+        assistant_msg.pop("reasoning_content", None)
+        assistant_msg.pop("codex_message_items", None)
 
     def _ensure_stream_writer_state(self) -> None:
         """Lazily create the single-writer guard fields (#65991).
@@ -6919,6 +6950,8 @@ class AIAgent:
             logger.debug("on_stream_start plugin hook enqueue failed", exc_info=True)
 
     def _emit_stream_end(self, *, final_text: str, finished: bool, error: str | None) -> None:
+        if getattr(self, "_finalization_buffering_required", False) is True:
+            final_text = ""
         try:
             from agent.plugin_stream_hooks import enqueue_plugin_stream_hook
 
@@ -6934,6 +6967,11 @@ class AIAgent:
 
     def _fire_stream_delta(self, text: str) -> None:
         """Fire all registered stream delta callbacks (display + TTS)."""
+        # Required finalization policies evaluate the complete, transformed
+        # response.  Candidate text must remain host-buffered until that gate
+        # allows release; tool progress/reasoning use separate callbacks.
+        if getattr(self, "_finalization_buffering_required", False) is True:
+            return
         # Single-writer guard (#65991): a superseded stream must not interleave
         # its tokens into the turn alongside the retry that replaced it.
         if self._stream_writer_superseded():
@@ -7003,6 +7041,8 @@ class AIAgent:
 
     def _fire_reasoning_delta(self, text: str) -> None:
         """Fire reasoning callback if registered."""
+        if getattr(self, "_finalization_buffering_required", False):
+            return
         # Single-writer guard (#65991): fence out a superseded stream's
         # reasoning deltas the same way as content deltas.
         if self._stream_writer_superseded():

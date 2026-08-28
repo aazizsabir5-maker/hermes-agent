@@ -1,0 +1,37 @@
+"""The fork ships the audited design protocol as a portable skill bundle."""
+
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[2]
+SKILL = ROOT / "skills" / "design" / "comprehensive-designer-cognition"
+
+
+def test_design_protocol_bundle_contains_runtime_contract():
+    required = {
+        "SKILL.md",
+        "scripts/init_design_protocol.py",
+        "scripts/validate_design_completion.py",
+        "scripts/create_review_receipt.py",
+        "templates/DESIGN-COMPLETION.json",
+        "templates/INDEPENDENT-REVIEW.md",
+        "templates/REVIEW-RECEIPT.json",
+    }
+    assert {str(path.relative_to(SKILL)) for path in SKILL.rglob("*") if path.is_file()} >= required
+
+
+def test_design_protocol_bundle_is_machine_path_portable():
+    for path in SKILL.rglob("*"):
+        if path.is_file():
+            text = path.read_text(encoding="utf-8")
+            assert "/Users/ariansabir" not in text
+
+
+def test_validator_and_helpers_compile():
+    for name in (
+        "init_design_protocol.py",
+        "validate_design_completion.py",
+        "create_review_receipt.py",
+    ):
+        source = (SKILL / "scripts" / name).read_text(encoding="utf-8")
+        compile(source, str(SKILL / "scripts" / name), "exec")
