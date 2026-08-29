@@ -208,6 +208,14 @@ def validate_project(project_root: str | Path) -> ValidationResult:
                     diagnostics.append(
                         f"{decision_id} is the hierarchy root and must start from situation or boundary context"
                     )
+                if not re.search(r"\b(?:situation|boundary)\b", parent_text, re.IGNORECASE):
+                    diagnostics.append(
+                        f"{decision_id} hierarchy root must start from situation or boundary context"
+                    )
+                if not re.search(r"\bintent\b", child_text, re.IGNORECASE):
+                    diagnostics.append(
+                        f"{decision_id} hierarchy root must lead to intent"
+                    )
                 map_parents[decision_id] = None
             elif len(parent_ids) != 1:
                 diagnostics.append(
@@ -254,13 +262,13 @@ def validate_project(project_root: str | Path) -> ValidationResult:
             diagnostics.append(
                 "Decision hierarchy must reach an implementation, realization, artifact, or delivery endpoint"
             )
-        for committed_id in sorted(committed_ids):
+        for recorded_id in sorted(records):
             traced = False
             for endpoint_id in endpoint_ids:
                 current: str | None = endpoint_id
                 visited: set[str] = set()
                 while current is not None and current not in visited:
-                    if current == committed_id:
+                    if current == recorded_id:
                         traced = True
                         break
                     visited.add(current)
@@ -269,7 +277,7 @@ def validate_project(project_root: str | Path) -> ValidationResult:
                     break
             if not traced:
                 diagnostics.append(
-                    f"{committed_id} must lie on a connected trace to an implementation, realization, artifact, or delivery endpoint"
+                    f"{recorded_id} must lie on a connected trace to an implementation, realization, artifact, or delivery endpoint"
                 )
     if not committed_ids:
         diagnostics.append(

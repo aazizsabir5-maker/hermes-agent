@@ -300,6 +300,15 @@ def test_decision_map_requires_one_connected_hierarchy(tmp_path):
     assert result.passed is False
     assert "hierarchy" in "\n".join(result.diagnostics).lower()
 
+    arbitrary_root = _valid_ledger().replace(
+        "- D-001 [context] situation → intent",
+        "- D-001 [context] arbitrary-root → intent",
+    )
+    _write(tmp_path, arbitrary_root)
+    result = validator.validate_project(tmp_path)
+    assert result.passed is False
+    assert "situation" in "\n".join(result.diagnostics).lower()
+
 
 def test_completion_requires_implementation_endpoint_and_committed_record(tmp_path):
     validator = _load_validator()
@@ -327,6 +336,33 @@ def test_completion_requires_implementation_endpoint_and_committed_record(tmp_pa
     assert result.passed is False
     joined = "\n".join(result.diagnostics)
     assert "D-002" in joined
+    assert "implementation" in joined.lower()
+
+    untraced_context_record = _valid_ledger().replace(
+        "- D-002 [validated] D-001 → implementation",
+        "- D-002 [validated] D-001 → implementation\n"
+        "- D-003 [context] D-001 → system rule",
+    ).replace(
+        "## Unresolved consequential decisions",
+        "### D-003 — Context decision\n\n"
+        "- Level: System\n"
+        "- Question: Which context rule applies?\n"
+        "- Criteria: Clear and reversible\n"
+        "- Alternatives: A — retain; B — revise\n"
+        "- Selection: A\n"
+        "- Tradeoff: Less flexibility\n"
+        "- Evidence: Existing behavior\n"
+        "- Assumptions: Context remains stable\n"
+        "- Consequences: Rule remains visible\n"
+        "- Validation: Review the rule\n"
+        "- Reopen if: Context changes\n\n"
+        "## Unresolved consequential decisions",
+    )
+    _write(tmp_path, untraced_context_record)
+    result = validator.validate_project(tmp_path)
+    assert result.passed is False
+    joined = "\n".join(result.diagnostics)
+    assert "D-003" in joined
     assert "implementation" in joined.lower()
 
 
