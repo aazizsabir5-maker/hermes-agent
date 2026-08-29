@@ -291,6 +291,47 @@ def test_enforced_policy_registry_failure_buffers_and_fails_closed(monkeypatch):
     assert agent.stream_delta_callback is None
 
 
+def test_enforced_empty_policy_registry_buffers_and_fails_closed():
+    agent = _FakeAgent()
+    agent.stream_delta_callback = lambda _delta: None
+    manager = types.SimpleNamespace(iter_finalization_policies=lambda: ())
+
+    with (
+        patch("hermes_cli.plugins.get_plugin_manager", return_value=manager),
+        patch("agent.runtime_cwd.resolve_context_cwd", return_value="/tmp/project"),
+        patch(
+            "plugins.policies.design_enforcement.decision_enforcement_enabled",
+            return_value=True,
+        ),
+    ):
+        _build(agent, user_message="Finish the design project")
+
+    assert agent._active_finalization_policy_ids == ("design-completion",)
+    assert agent._finalization_buffering_required is True
+    assert agent.stream_delta_callback is None
+
+
+def test_design_continuation_scope_survives_ledger_loss(tmp_path):
+    agent = _FakeAgent()
+    policy = RegisteredFinalizationPolicy(
+        id="design-completion",
+        callback=lambda _context: None,
+        turn_predicate=lambda _root, message: "design" in str(message).lower(),
+    )
+    manager = types.SimpleNamespace(iter_finalization_policies=lambda: (policy,))
+
+    with (
+        patch("hermes_cli.plugins.get_plugin_manager", return_value=manager),
+        patch("agent.runtime_cwd.resolve_context_cwd", return_value=str(tmp_path)),
+    ):
+        _build(agent, user_message="Design a checkout flow")
+        assert agent._decision_design_project_root == str(tmp_path)
+        _build(agent, user_message="Continue.")
+
+    assert agent._active_finalization_policy_ids == ("design-completion",)
+    assert agent._finalization_buffering_required is True
+
+
 def test_user_message_preserves_platform_event_timestamp():
     agent = _FakeAgent()
 

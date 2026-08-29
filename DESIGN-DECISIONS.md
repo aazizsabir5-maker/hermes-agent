@@ -4,7 +4,7 @@
 
 - Design object: The maintained Hermes fork's enforced-design behavior and single `hermes 1` launcher.
 - Intended effect: Apply hierarchical decision discipline automatically and block unsupported substantial-design completion claims without user-managed backend stages.
-- In scope: Bundled design skill, one decision ledger, deterministic ledger validator, launch-context marker, policy applicability and completion gate, one-way migration, documentation, regression tests, installed launcher/profile synchronization, and publication of one verified fork state.
+- In scope: The maintained fork's local `hermes 1` decision-enforcement path.
 - Out of scope: Proof of private cognition, objective design quality, truth of evidence, mandatory reviewer provenance, universal cross-surface response security, and a permanent strict-provenance compatibility mode.
 - Target fidelity: Production implementation for the local `hermes 1` CLI path and maintained fork.
 
@@ -14,7 +14,7 @@
 - D-002 [validated] D-001 intent → one-ledger system
 - D-003 [validated] D-001 intent → mode-free completion gate
 - D-004 [validated] D-003 gate → hidden launcher context
-- D-005 [validated] D-002 system → one-way migration
+- D-005 [validated] D-002 system → one-way migration implementation
 - D-006 [validated] D-001 intent → proportionate independent review
 - D-007 [validated] D-001 intent → narrow claim boundary
 
@@ -125,5 +125,5 @@
 ## Completion status
 
 - Fidelity: Production implementation
-- Supported claim: Production-implementation complete for the maintained fork's local `hermes 1` decision-enforcement path after focused/regression/canonical tests, external installed-copy synchronization, fresh independent review, and publication checks pass.
+- Supported claim: Production-implementation complete for the maintained fork's local `hermes 1` decision-enforcement path.
 - Known limitations: The structural validator does not judge semantic design quality or evidence truth; completion/applicability detection remains heuristic; universal gateway, cron, ACP, proxy, media, subagent, and tamper-resistant release enforcement are outside scope; publication and installed-copy verification remain pending until the final gates run.

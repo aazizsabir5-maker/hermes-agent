@@ -271,6 +271,15 @@ def test_ready_to_ship_claim_is_validated_but_negated_delivery_is_working_text(t
     assert working.action is FinalizationAction.ALLOW
     assert working.reason_code == "working_response"
 
+    for response in (
+        "This isn't a final delivery.",
+        "We do not claim a final delivery.",
+        "This isn't production-ready.",
+    ):
+        working = policy.evaluate(_context(tmp_path, response=response))
+        assert working.action is FinalizationAction.ALLOW
+        assert working.reason_code == "working_response"
+
 
 def test_supported_claim_cannot_authorize_a_broader_piggyback_claim(tmp_path):
     policy = _policy(tmp_path, _validation(passed=True))
@@ -281,3 +290,24 @@ def test_supported_claim_cannot_authorize_a_broader_piggyback_claim(tmp_path):
     decision = policy.evaluate(_context(tmp_path, response=response))
     assert decision.action is FinalizationAction.BLOCK
     assert decision.reason_code == "candidate_claim_unqualified"
+
+
+@pytest.mark.parametrize(
+    "response",
+    (
+        "The design can now be considered complete.",
+        "The design is launch-ready.",
+    ),
+)
+def test_additional_common_completion_equivalents_are_validated(tmp_path, response):
+    policy = _policy(
+        tmp_path,
+        _validation(
+            passed=False,
+            reason="unresolved_decisions",
+            diagnostics=("Unresolved consequential decisions: D-023",),
+        ),
+    )
+    decision = policy.evaluate(_context(tmp_path, response=response))
+    assert decision.action is FinalizationAction.BLOCK
+    assert "D-023" in decision.user_message

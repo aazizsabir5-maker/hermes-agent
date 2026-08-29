@@ -70,6 +70,8 @@ _COMPLETION_CLAIM_RE = re.compile(
     r"\b(?:meets all requirements|ready for handoff)\b|"
     r"\b(?:is\s+)?ready\s+(?:to ship|for delivery)\b|"
     r"\brequirements\s+(?:are\s+)?satisfied\b|"
+    r"\b(?:can now be |may be )?considered complete\b|"
+    r"\blaunch[- ]ready\b|"
     r"^(?:done|complete|completed|finished|finalized|delivered|shipped)[.!]?$",
     re.IGNORECASE | re.MULTILINE,
 )
@@ -92,11 +94,26 @@ def _normalized_claim(value: str) -> str:
 
 def _completion_claim_fragments(value: str) -> tuple[str, ...]:
     fragments = re.split(r"[.!?]+(?:\s+|$)|\n+", value)
-    return tuple(
-        fragment.strip()
-        for fragment in fragments
-        if fragment.strip() and _COMPLETION_CLAIM_RE.search(fragment)
-    )
+    claims = []
+    for fragment in fragments:
+        stripped = fragment.strip()
+        if not stripped:
+            continue
+        for match in _COMPLETION_CLAIM_RE.finditer(stripped):
+            prefix = stripped[max(0, match.start() - 40) : match.start()]
+            if re.search(
+                r"(?:\bnot\b|n't\b|\b(?:do|does|did) not claim\b).{0,20}$",
+                prefix,
+                re.IGNORECASE,
+            ):
+                continue
+            claims.append(stripped)
+            break
+    return tuple(claims)
+
+
+def is_design_continuation(value: Any) -> bool:
+    return bool(_CONTINUATION_RE.search(_stringify(value)))
 
 
 def _is_design_request(text: str) -> bool:

@@ -626,6 +626,7 @@ def build_turn_context(
     # withheld only for applicable local policy turns; ordinary sessions keep
     # the upstream streaming path unchanged.
     active_policies = []
+    seen_policy_ids: set[str] = set()
     missing_required_policy_ids: tuple[str, ...] = ()
     try:
         from agent.finalization_policy import policy_buffers_turn
@@ -638,11 +639,25 @@ def build_turn_context(
             or os.getcwd()
         )
         for policy in get_plugin_manager().iter_finalization_policies():
+            seen_policy_ids.add(policy.id)
             applies, _error = policy_buffers_turn(
                 policy, str(project_root), user_message
             )
+            if (
+                not applies
+                and policy.id == "design-completion"
+                and getattr(agent, "_decision_design_project_root", None)
+                == str(project_root)
+            ):
+                from plugins.policies.design_enforcement.policy import (
+                    is_design_continuation,
+                )
+
+                applies = is_design_continuation(user_message)
             if applies:
                 active_policies.append(policy)
+                if policy.id == "design-completion":
+                    agent._decision_design_project_root = str(project_root)
     except Exception:
         logger.debug("completion policy turn scoping failed", exc_info=True)
         try:
@@ -652,6 +667,14 @@ def build_turn_context(
                 missing_required_policy_ids = ("design-completion",)
         except Exception:
             logger.debug("decision enforcement launch-state lookup failed", exc_info=True)
+    if not missing_required_policy_ids:
+        try:
+            from plugins.policies.design_enforcement import decision_enforcement_enabled
+
+            if decision_enforcement_enabled() and "design-completion" not in seen_policy_ids:
+                missing_required_policy_ids = ("design-completion",)
+        except Exception:
+            logger.debug("decision enforcement policy availability check failed", exc_info=True)
     agent._active_finalization_policies = tuple(active_policies)
     active_policy_ids = tuple(policy.id for policy in active_policies) + missing_required_policy_ids
     agent._active_finalization_policy_ids = active_policy_ids

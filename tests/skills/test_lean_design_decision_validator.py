@@ -241,6 +241,27 @@ def test_supported_claim_cannot_hide_mismatched_fidelity_after_completion(tmp_pa
     assert "fidelity" in "\n".join(result.diagnostics).lower()
 
 
+def test_supported_claim_scope_must_equal_boundary_and_cannot_piggyback(tmp_path):
+    validator = _load_validator()
+    too_broad = _valid_ledger().replace(
+        "Prototype-fidelity design complete for cart through confirmation",
+        "Prototype-fidelity design complete for the entire production system",
+    )
+    _write(tmp_path, too_broad)
+    result = validator.validate_project(tmp_path)
+    assert result.passed is False
+    assert "scope" in "\n".join(result.diagnostics).lower()
+
+    piggyback = _valid_ledger().replace(
+        "Prototype-fidelity design complete for cart through confirmation",
+        "Prototype-fidelity design complete for cart through confirmation; production implementation ready for delivery",
+    )
+    _write(tmp_path, piggyback)
+    result = validator.validate_project(tmp_path)
+    assert result.passed is False
+    assert "single" in "\n".join(result.diagnostics).lower()
+
+
 def test_unknown_decision_map_status_is_rejected(tmp_path):
     validator = _load_validator()
     unknown = _valid_ledger().replace(
@@ -278,6 +299,23 @@ def test_decision_map_requires_one_connected_hierarchy(tmp_path):
     result = validator.validate_project(tmp_path)
     assert result.passed is False
     assert "hierarchy" in "\n".join(result.diagnostics).lower()
+
+
+def test_completion_requires_implementation_endpoint_and_committed_record(tmp_path):
+    validator = _load_validator()
+    strategy_only = _valid_ledger().replace(
+        "D-001 → implementation", "D-001 → strategy"
+    )
+    _write(tmp_path, strategy_only)
+    result = validator.validate_project(tmp_path)
+    assert result.passed is False
+    assert "implementation" in "\n".join(result.diagnostics).lower()
+
+    all_context = _valid_ledger().replace("[validated]", "[context]")
+    _write(tmp_path, all_context)
+    result = validator.validate_project(tmp_path)
+    assert result.passed is False
+    assert "committed" in "\n".join(result.diagnostics).lower()
 
 
 def test_missing_ledger_and_malformed_utf8_fail_cleanly(tmp_path):

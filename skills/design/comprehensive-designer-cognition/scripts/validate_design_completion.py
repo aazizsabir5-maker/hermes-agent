@@ -175,6 +175,7 @@ def validate_project(project_root: str | Path) -> ValidationResult:
     map_ids: set[str] = set()
     map_order: list[str] = []
     map_parents: dict[str, str | None] = {}
+    map_children: dict[str, str] = {}
     committed_ids: set[str] = set()
     unresolved_status_ids: set[str] = set()
     for line in sections.get("Decision map", []):
@@ -196,6 +197,7 @@ def validate_project(project_root: str | Path) -> ValidationResult:
             map_parents[decision_id] = None
         else:
             parent_text, child_text = (part.strip() for part in relationship.split(arrow, 1))
+            map_children[decision_id] = child_text
             parent_ids = _DECISION_ID_RE.findall(parent_text)
             if not parent_text or not child_text:
                 diagnostics.append(
@@ -239,6 +241,17 @@ def validate_project(project_root: str | Path) -> ValidationResult:
                     f"{decision_id} parent {parent_id} must reference an earlier connected map decision"
                 )
             prior_ids.add(decision_id)
+        if not any(
+            re.search(r"\b(?:implementation|realization|artifact|delivery)\b", child, re.IGNORECASE)
+            for child in map_children.values()
+        ):
+            diagnostics.append(
+                "Decision hierarchy must reach an implementation, realization, artifact, or delivery endpoint"
+            )
+    if not committed_ids:
+        diagnostics.append(
+            "Completion requires at least one committed or validated consequential decision"
+        )
     for decision_id in sorted(committed_ids - records.keys()):
         diagnostics.append(f"{decision_id} is committed or validated but has no decision record")
     for decision_id in sorted(records.keys() - map_ids):
@@ -276,8 +289,19 @@ def validate_project(project_root: str | Path) -> ValidationResult:
     )
     fidelity = completion.get("Fidelity", "")
     supported_claim = completion.get("Supported claim", "")
-    if supported_claim and not re.search(r"\bfor\s+\S+", supported_claim, re.IGNORECASE):
-        diagnostics.append("Supported claim must name its completion scope with a 'for …' clause")
+    in_scope = boundary.get("In scope", "")
+    normalized_scope = re.sub(r"\s+", " ", in_scope).strip().rstrip(".!?").casefold()
+    claim_match = re.fullmatch(
+        r"(.+?)\bcomplete\s+for\s+(.+)", supported_claim.strip().rstrip(".!?"), re.IGNORECASE
+    )
+    if ";" in supported_claim or len(re.findall(r"\bcomplete\b", supported_claim, re.IGNORECASE)) != 1:
+        diagnostics.append("Supported claim must contain one single completion claim")
+    if not claim_match:
+        diagnostics.append("Supported claim must use '<fidelity> complete for <scope>'")
+    else:
+        claimed_scope = re.sub(r"\s+", " ", claim_match.group(2)).strip().casefold()
+        if not normalized_scope or claimed_scope != normalized_scope:
+            diagnostics.append("Supported claim scope must exactly match Boundary In scope")
     meaningful_fidelity_tokens = {
         token
         for token in re.findall(r"[a-z0-9]+", fidelity.casefold())
