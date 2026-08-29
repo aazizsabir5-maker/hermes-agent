@@ -277,6 +277,9 @@ def test_ready_to_ship_claim_is_validated_but_negated_delivery_is_working_text(t
         "No final delivery is being claimed.",
         "Nothing about this design is complete.",
         "Neither the design nor the implementation is complete.",
+        "I have not deemed this design complete.",
+        "I never declared this design complete.",
+        "I no longer consider this design complete.",
         "This isn't production-ready.",
     ):
         working = policy.evaluate(_context(tmp_path, response=response))
@@ -306,6 +309,11 @@ def test_supported_claim_cannot_authorize_a_broader_piggyback_claim(tmp_path):
         "I regard this design as complete.",
         "I view this design as complete.",
         "I judge this design complete.",
+        "I have deemed this design complete.",
+        "I declared this design complete.",
+        "We have certified the implementation as complete.",
+        "I found the design complete.",
+        "I consider the design to be completed.",
         "There is no doubt: the design is complete.",
         "No caveat: design is complete.",
         "Nothing about the implementation is complete but the design is complete.",

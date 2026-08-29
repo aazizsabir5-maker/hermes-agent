@@ -71,7 +71,12 @@ _COMPLETION_CLAIM_RE = re.compile(
     r"\b(?:is\s+)?ready\s+(?:to ship|for delivery)\b|"
     r"\brequirements\s+(?:are\s+)?satisfied\b|"
     r"\b(?:can now be |may be )?considered complete\b|"
-    r"\b(?:consider|deem|declare|call(?:ing)?|regard|view|judge|certify|pronounce|assess|believe|find)\s+(?:(?:the|this|that|our|my|your|their|a)\s+)?(?:design|project|implementation|work|deliverable|it)\s+(?:(?:to be|as)\s+)?(?:complete|finished|final|ready)\b|"
+    r"\b(?:consider(?:ed)?|deem(?:ed)?|declar(?:e|ed)|call(?:ed|ing)?|regard(?:ed)?|"
+    r"view(?:ed)?|judg(?:e|ed)|certif(?:y|ied)|pronounc(?:e|ed)|assess(?:ed)?|"
+    r"believ(?:e|ed)|find|found)\s+"
+    r"(?:(?:the|this|that|our|my|your|their|a)\s+)?"
+    r"(?:design|project|implementation|work|deliverable|it)\s+"
+    r"(?:(?:to be|as)\s+)?(?:complete|completed|finished|final|ready)\b|"
     r"\blaunch[- ]ready\b|"
     r"^(?:done|complete|completed|finished|finalized|delivered|shipped)[.!]?$",
     re.IGNORECASE | re.MULTILINE,
@@ -108,7 +113,8 @@ def _completion_claim_fragments(value: str) -> tuple[str, ...]:
                 flags=re.IGNORECASE,
             )[-1]
             directly_negated = re.search(
-                r"(?:\bnot|n't|\b(?:do|does|did) not claim)\s+(?:a\s+|the\s+)?$",
+                r"(?:\bnot|n't|\bnever|\bno longer|\b(?:do|does|did) not claim)"
+                r"\s+(?:a\s+|the\s+)?$",
                 clause_prefix,
                 re.IGNORECASE,
             )
