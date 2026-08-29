@@ -13,10 +13,10 @@
 - D-001 [validated] situation → reduced product intent
 - D-002 [validated] D-001 intent → one-ledger system
 - D-003 [validated] D-001 intent → mode-free completion gate
-- D-004 [validated] D-003 gate → hidden launcher context
+- D-004 [validated] D-003 gate → hidden launcher implementation
 - D-005 [validated] D-002 system → one-way migration implementation
-- D-006 [validated] D-001 intent → proportionate independent review
-- D-007 [validated] D-001 intent → narrow claim boundary
+- D-006 [validated] D-001 intent → independent-review release realization
+- D-007 [validated] D-001 intent → narrow claim-boundary implementation
 
 ## Consequential decisions
 

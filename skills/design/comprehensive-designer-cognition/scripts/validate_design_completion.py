@@ -241,13 +241,36 @@ def validate_project(project_root: str | Path) -> ValidationResult:
                     f"{decision_id} parent {parent_id} must reference an earlier connected map decision"
                 )
             prior_ids.add(decision_id)
-        if not any(
-            re.search(r"\b(?:implementation|realization|artifact|delivery)\b", child, re.IGNORECASE)
-            for child in map_children.values()
-        ):
+        endpoint_ids = {
+            decision_id
+            for decision_id, child in map_children.items()
+            if re.search(
+                r"\b(?:implementation|realization|artifact|delivery)\b",
+                child,
+                re.IGNORECASE,
+            )
+        }
+        if not endpoint_ids:
             diagnostics.append(
                 "Decision hierarchy must reach an implementation, realization, artifact, or delivery endpoint"
             )
+        for committed_id in sorted(committed_ids):
+            traced = False
+            for endpoint_id in endpoint_ids:
+                current: str | None = endpoint_id
+                visited: set[str] = set()
+                while current is not None and current not in visited:
+                    if current == committed_id:
+                        traced = True
+                        break
+                    visited.add(current)
+                    current = map_parents.get(current)
+                if traced:
+                    break
+            if not traced:
+                diagnostics.append(
+                    f"{committed_id} must lie on a connected trace to an implementation, realization, artifact, or delivery endpoint"
+                )
     if not committed_ids:
         diagnostics.append(
             "Completion requires at least one committed or validated consequential decision"

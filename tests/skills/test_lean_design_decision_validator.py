@@ -317,6 +317,18 @@ def test_completion_requires_implementation_endpoint_and_committed_record(tmp_pa
     assert result.passed is False
     assert "committed" in "\n".join(result.diagnostics).lower()
 
+    disconnected_consequence = _valid_ledger().replace(
+        "- D-002 [validated] D-001 → implementation",
+        "- D-002 [validated] D-001 → strategy\n"
+        "- D-003 [context] D-001 → implementation",
+    )
+    _write(tmp_path, disconnected_consequence)
+    result = validator.validate_project(tmp_path)
+    assert result.passed is False
+    joined = "\n".join(result.diagnostics)
+    assert "D-002" in joined
+    assert "implementation" in joined.lower()
+
 
 def test_missing_ledger_and_malformed_utf8_fail_cleanly(tmp_path):
     validator = _load_validator()

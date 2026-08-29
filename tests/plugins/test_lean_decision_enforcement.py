@@ -296,6 +296,7 @@ def test_supported_claim_cannot_authorize_a_broader_piggyback_claim(tmp_path):
     "response",
     (
         "The design can now be considered complete.",
+        "I consider the design complete.",
         "The design is launch-ready.",
     ),
 )
