@@ -101,12 +101,22 @@ def _completion_claim_fragments(value: str) -> tuple[str, ...]:
         if not stripped:
             continue
         for match in _COMPLETION_CLAIM_RE.finditer(stripped):
-            prefix = stripped[max(0, match.start() - 40) : match.start()]
-            if re.search(
-                r"(?:\bno\b|\bnot\b|n't\b|\b(?:do|does|did) not claim\b).{0,20}$",
-                prefix,
+            prefix = stripped[: match.start()]
+            clause_prefix = re.split(r"[:;,.!?]", prefix)[-1]
+            directly_negated = re.search(
+                r"(?:\bnot|n't|\b(?:do|does|did) not claim)\s+(?:a\s+|the\s+)?$",
+                clause_prefix,
                 re.IGNORECASE,
-            ):
+            )
+            negative_subject = re.search(
+                r"(?:\bnothing\b[^:;,.!?]*|"
+                r"\bno\s*|"
+                r"\bno\s+(?:design|project|implementation|work|deliverable|part|aspect|portion)\b[^:;,.!?]*|"
+                r"\bneither\b[^:;,.!?]{0,60}\bnor\b[^:;,.!?]{0,40})$",
+                clause_prefix,
+                re.IGNORECASE,
+            )
+            if directly_negated or negative_subject:
                 continue
             claims.append(stripped)
             break
