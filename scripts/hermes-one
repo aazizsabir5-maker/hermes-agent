@@ -8,4 +8,5 @@ if [ ! -x "$fork_executable" ]; then
     exit 127
 fi
 
-exec "$fork_executable" --profile decision --decision-enforced "$@"
+export TERMINAL_CWD="$PWD"
+exec "$fork_executable" --profile decision --decision-enforced --no-restore-cwd --in "$PWD" "$@"

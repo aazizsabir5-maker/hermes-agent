@@ -24,12 +24,18 @@ def test_launcher_targets_fork_profile_and_internal_marker():
     assert FORK_EXECUTABLE in text
     assert "--profile decision" in text
     assert "--decision-enforced" in text
+    assert "--no-restore-cwd" in text
+    assert '"$PWD"' in text
+    assert 'export TERMINAL_CWD="$PWD"' in text
     assert "enforcement.json" not in text
 
 
 def test_launcher_forwards_arguments_from_any_writable_directory(tmp_path):
     fake = tmp_path / "fake-hermes"
-    fake.write_text("#!/bin/sh\nprintf '%s\\n' \"$@\"\n", encoding="utf-8")
+    fake.write_text(
+        "#!/bin/sh\nprintf 'cwd=%s\\n' \"$TERMINAL_CWD\"\nprintf '%s\\n' \"$@\"\n",
+        encoding="utf-8",
+    )
     fake.chmod(0o755)
     launcher = _launcher_with_executable(tmp_path, fake)
 
@@ -42,9 +48,13 @@ def test_launcher_forwards_arguments_from_any_writable_directory(tmp_path):
         check=True,
     )
     assert completed.stdout.splitlines() == [
+        f"cwd={tmp_path}",
         "--profile",
         "decision",
         "--decision-enforced",
+        "--no-restore-cwd",
+        "--in",
+        str(tmp_path),
         "--version",
     ]
 
