@@ -280,6 +280,7 @@ def test_ready_to_ship_claim_is_validated_but_negated_delivery_is_working_text(t
         "I have not deemed this design complete.",
         "I never declared this design complete.",
         "I no longer consider this design complete.",
+        "I am not deeming this design complete.",
         "This isn't production-ready.",
     ):
         working = policy.evaluate(_context(tmp_path, response=response))
@@ -314,6 +315,10 @@ def test_supported_claim_cannot_authorize_a_broader_piggyback_claim(tmp_path):
         "We have certified the implementation as complete.",
         "I found the design complete.",
         "I consider the design to be completed.",
+        "I am deeming this design complete.",
+        "We are declaring the project complete.",
+        "I am judging this design complete.",
+        "Hermes considers this design complete.",
         "There is no doubt: the design is complete.",
         "No caveat: design is complete.",
         "Nothing about the implementation is complete but the design is complete.",
