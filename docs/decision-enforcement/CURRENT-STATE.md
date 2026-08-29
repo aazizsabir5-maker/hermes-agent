@@ -87,10 +87,13 @@ Completed on the final reviewed implementation:
 - installed decision skill synchronized exactly to the bundled skill and obsolete comprehensive-protocol files removed;
 - real installed checks passed for `hermes 1 --version`, `hermes 1 tools list`, plain `hermes --version`, invocation-directory preservation, ledger creation, and unsupported-completion blocking.
 
-Canonical-suite environmental boundary:
+Canonical-suite boundary:
 
-- The final uninterrupted `scripts/run_tests.sh` attempt was stopped after 2,342 seconds at 21.9% because unrelated tests exhibited severe host-wide timing inflation: 8,298 tests had passed, 7 had failed, many normally short files took 200–600 seconds, and `tests/cron/test_scheduler.py` was killed by its 300-second per-file timeout. This is recorded as an environmental blocker, not a pass.
-- Focused changed-surface and acceptance checks remained green under the same tree; none of the seven observed canonical failures were in the decision-enforcement changed surface.
+- A canonical `scripts/run_tests.sh` run on the reviewed implementation candidate completed with exit 1: 84 test failures across 29 files, three all-pass files with non-zero pytest exits, and four files with no completed tests. None of the 29 failed files was changed relative to `upstream/main`.
+- A detached `upstream/main` worktree rerun of all 29 failed files reproduced 84 failures across 28 files. The one-file distribution difference came from timing-sensitive command-token/heartbeat behavior; the failure total and unaffected subsystems were otherwise reproduced without the lean-enforcement diff.
+- A second baseline batch covered the seven warning/collection/timeout anomalies: six passed when run outside the full parallel load, while `tests/tools/test_execution_flag_detection.py` completed with three failures on unmodified `upstream/main`.
+- A later complete-tree attempt was stopped after 2,342 seconds at 21.9% because of severe timing inflation: 8,298 tests had passed, seven had failed, many files took 200–600 seconds, and `tests/cron/test_scheduler.py` exceeded its 300-second file timeout.
+- The full repository suite is therefore not claimed as a pass. The focused changed-surface and acceptance checks remained green, and the upstream-baseline comparison found no failure attributable to the lean decision-enforcement diff.
 
 Publication state:
 
