@@ -102,7 +102,11 @@ def _completion_claim_fragments(value: str) -> tuple[str, ...]:
             continue
         for match in _COMPLETION_CLAIM_RE.finditer(stripped):
             prefix = stripped[: match.start()]
-            clause_prefix = re.split(r"[:;,.!?]", prefix)[-1]
+            clause_prefix = re.split(
+                r"[:;,.!?]|\b(?:but|however|yet)\b",
+                prefix,
+                flags=re.IGNORECASE,
+            )[-1]
             directly_negated = re.search(
                 r"(?:\bnot|n't|\b(?:do|does|did) not claim)\s+(?:a\s+|the\s+)?$",
                 clause_prefix,
