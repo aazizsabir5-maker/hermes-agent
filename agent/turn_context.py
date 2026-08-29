@@ -626,6 +626,7 @@ def build_turn_context(
     # withheld only for applicable local policy turns; ordinary sessions keep
     # the upstream streaming path unchanged.
     active_policies = []
+    missing_required_policy_ids: tuple[str, ...] = ()
     try:
         from agent.finalization_policy import policy_buffers_turn
         from agent.runtime_cwd import resolve_context_cwd
@@ -644,11 +645,18 @@ def build_turn_context(
                 active_policies.append(policy)
     except Exception:
         logger.debug("completion policy turn scoping failed", exc_info=True)
+        try:
+            from plugins.policies.design_enforcement import decision_enforcement_enabled
+
+            if decision_enforcement_enabled():
+                missing_required_policy_ids = ("design-completion",)
+        except Exception:
+            logger.debug("decision enforcement launch-state lookup failed", exc_info=True)
     agent._active_finalization_policies = tuple(active_policies)
-    active_policy_ids = tuple(policy.id for policy in active_policies)
+    active_policy_ids = tuple(policy.id for policy in active_policies) + missing_required_policy_ids
     agent._active_finalization_policy_ids = active_policy_ids
-    agent._finalization_buffering_required = bool(active_policies)
-    if active_policies:
+    agent._finalization_buffering_required = bool(active_policy_ids)
+    if active_policy_ids:
         agent._decision_buffered_callbacks = (
             getattr(agent, "stream_delta_callback", None),
             getattr(agent, "interim_assistant_callback", None),

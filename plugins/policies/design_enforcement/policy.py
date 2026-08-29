@@ -51,11 +51,16 @@ _FINISH_REQUEST_RE = re.compile(
     r"\b(project|design|work|it)\b.{0,40}\b(finished|complete|finalized|delivered|shipped)\b",
     re.IGNORECASE,
 )
+_CONTINUATION_RE = re.compile(
+    r"^\s*(?:continue|go on|proceed|keep going|carry on|next|finish it|complete it)"
+    r"(?:\s+(?:please|now))?[.!?]?\s*$",
+    re.IGNORECASE,
+)
 _COMPLETION_CLAIM_RE = re.compile(
     r"\b(is|are|'s|has been|have been)\s+(?:now\s+)?(?:fully\s+)?"
     r"(complete|completed|finished|finalized|done|delivered|shipped)\b|"
-    r"\b(production[- ]ready|fully designed|completion claim)\b|"
-    r"(?<!not )(?<!not yet )\bfinal delivery\b|"
+    r"(?<!not )\b(production[- ]ready|fully designed|completion claim)\b|"
+    r"(?<!not )(?<!not a )(?<!not yet )\bfinal delivery\b|"
     r"\b(?:i|we)(?:'ve| have)?\s+(?:now\s+)?(?:fully\s+)?"
     r"(?:completed|finished|finalized|delivered|shipped)\b|"
     r"\b(?:i|we)(?:'m| am| are)\s+(?:now\s+)?done\b|"
@@ -63,6 +68,8 @@ _COMPLETION_CLAIM_RE = re.compile(
     r"[- ](?:fidelity[- ]?)?(?:design|artifact|implementation)?\s+complete\b|"
     r"\bsystem\s+specified\b|"
     r"\b(?:meets all requirements|ready for handoff)\b|"
+    r"\b(?:is\s+)?ready\s+(?:to ship|for delivery)\b|"
+    r"\brequirements\s+(?:are\s+)?satisfied\b|"
     r"^(?:done|complete|completed|finished|finalized|delivered|shipped)[.!]?$",
     re.IGNORECASE | re.MULTILINE,
 )
@@ -80,7 +87,16 @@ def _enabled(value: bool | Callable[[], bool]) -> bool:
 
 
 def _normalized_claim(value: str) -> str:
-    return re.sub(r"\s+", " ", value).strip().rstrip(".").casefold()
+    return re.sub(r"\s+", " ", value).strip().rstrip(".!?").casefold()
+
+
+def _completion_claim_fragments(value: str) -> tuple[str, ...]:
+    fragments = re.split(r"[.!?]+(?:\s+|$)|\n+", value)
+    return tuple(
+        fragment.strip()
+        for fragment in fragments
+        if fragment.strip() and _COMPLETION_CLAIM_RE.search(fragment)
+    )
 
 
 def _is_design_request(text: str) -> bool:
@@ -128,10 +144,10 @@ class DesignCompletionPolicy:
     def applies_to_turn(self, project_root: str, user_message: Any) -> bool:
         if not _enabled(self.enforced):
             return False
-        root = Path(project_root).expanduser().resolve(strict=False)
-        if (root / "DESIGN-DECISIONS.md").is_file():
-            return True
         text = _stringify(user_message)
+        root = Path(project_root).expanduser().resolve(strict=False)
+        if (root / "DESIGN-DECISIONS.md").is_file() and _CONTINUATION_RE.search(text):
+            return True
         design_request = _is_design_request(text)
         finish_request = bool(_FINISH_REQUEST_RE.search(text))
         if design_request:
@@ -165,8 +181,8 @@ class DesignCompletionPolicy:
             )
 
         response = context.response_text or ""
-        completion_claim = bool(_COMPLETION_CLAIM_RE.search(response))
-        if not completion_claim:
+        completion_claim_fragments = _completion_claim_fragments(response)
+        if not completion_claim_fragments:
             return FinalizationDecision(
                 FinalizationAction.ALLOW,
                 "design-completion",
@@ -191,8 +207,14 @@ class DesignCompletionPolicy:
             )
         if validation.passed:
             supported_claim = str(getattr(validation, "supported_claim", "") or "").strip()
-            if not supported_claim or _normalized_claim(supported_claim) not in _normalized_claim(
-                response
+            supported_normalized = _normalized_claim(supported_claim)
+            candidate_claims = tuple(
+                _normalized_claim(fragment) for fragment in completion_claim_fragments
+            )
+            if (
+                not supported_normalized
+                or not candidate_claims
+                or any(claim != supported_normalized for claim in candidate_claims)
             ):
                 return FinalizationDecision(
                     FinalizationAction.BLOCK,

@@ -224,10 +224,11 @@ def test_question_form_design_requests_still_activate_enforcement(tmp_path, user
     assert (tmp_path / "DESIGN-DECISIONS.md").is_file()
 
 
-def test_existing_ledger_keeps_generic_followup_in_enforced_design_scope(tmp_path):
+def test_existing_ledger_keeps_continuation_but_not_unrelated_turn_in_scope(tmp_path):
     policy = _policy(tmp_path)
     assert policy.applies_to_turn(tmp_path, "Design a checkout flow") is True
     assert policy.applies_to_turn(tmp_path, "Continue.") is True
+    assert policy.applies_to_turn(tmp_path, "Explain Python tuples") is False
 
 
 def test_completion_equivalent_ready_for_handoff_claim_is_validated(tmp_path):
@@ -247,3 +248,36 @@ def test_completion_equivalent_ready_for_handoff_claim_is_validated(tmp_path):
     )
     assert decision.action is FinalizationAction.BLOCK
     assert "D-021" in decision.user_message
+
+
+def test_ready_to_ship_claim_is_validated_but_negated_delivery_is_working_text(tmp_path):
+    policy = _policy(
+        tmp_path,
+        _validation(
+            passed=False,
+            reason="unresolved_decisions",
+            diagnostics=("Unresolved consequential decisions: D-022",),
+        ),
+    )
+    blocked = policy.evaluate(
+        _context(tmp_path, response="The design is ready to ship.")
+    )
+    assert blocked.action is FinalizationAction.BLOCK
+    assert "D-022" in blocked.user_message
+
+    working = policy.evaluate(
+        _context(tmp_path, response="This is provisional and not a final delivery.")
+    )
+    assert working.action is FinalizationAction.ALLOW
+    assert working.reason_code == "working_response"
+
+
+def test_supported_claim_cannot_authorize_a_broader_piggyback_claim(tmp_path):
+    policy = _policy(tmp_path, _validation(passed=True))
+    response = (
+        "Prototype-fidelity design complete for cart through confirmation. "
+        "The whole production implementation is complete."
+    )
+    decision = policy.evaluate(_context(tmp_path, response=response))
+    assert decision.action is FinalizationAction.BLOCK
+    assert decision.reason_code == "candidate_claim_unqualified"

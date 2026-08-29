@@ -255,6 +255,31 @@ def test_unknown_decision_map_status_is_rejected(tmp_path):
     assert "status" in joined.lower()
 
 
+def test_decision_map_requires_one_connected_hierarchy(tmp_path):
+    validator = _load_validator()
+    disconnected = _valid_ledger().replace(
+        "- D-002 [validated] D-001 → implementation",
+        "- D-002 [validated] orphan-root → isolated-child",
+    )
+    _write(tmp_path, disconnected)
+    result = validator.validate_project(tmp_path)
+    assert result.passed is False
+    assert "D-002" in "\n".join(result.diagnostics)
+    assert "parent" in "\n".join(result.diagnostics).lower()
+
+    single_node = _valid_ledger().replace(
+        "- D-002 [validated] D-001 → implementation\n",
+        "",
+    ).replace(
+        "### D-002 — Guest checkout\n",
+        "### D-001 — Guest checkout\n",
+    )
+    _write(tmp_path, single_node)
+    result = validator.validate_project(tmp_path)
+    assert result.passed is False
+    assert "hierarchy" in "\n".join(result.diagnostics).lower()
+
+
 def test_missing_ledger_and_malformed_utf8_fail_cleanly(tmp_path):
     validator = _load_validator()
     missing = validator.validate_project(tmp_path)

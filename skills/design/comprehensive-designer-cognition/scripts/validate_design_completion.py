@@ -173,6 +173,8 @@ def validate_project(project_root: str | Path) -> ValidationResult:
             "Completion requires at least one consequential decision record"
         )
     map_ids: set[str] = set()
+    map_order: list[str] = []
+    map_parents: dict[str, str | None] = {}
     committed_ids: set[str] = set()
     unresolved_status_ids: set[str] = set()
     for line in sections.get("Decision map", []):
@@ -187,8 +189,31 @@ def validate_project(project_root: str | Path) -> ValidationResult:
         if decision_id in map_ids:
             diagnostics.append(f"Duplicate decision-map identifier: {decision_id}")
         map_ids.add(decision_id)
-        if "→" not in relationship and "->" not in relationship:
+        map_order.append(decision_id)
+        arrow = "→" if "→" in relationship else "->" if "->" in relationship else ""
+        if not arrow:
             diagnostics.append(f"{decision_id} must trace a parent → child relationship")
+            map_parents[decision_id] = None
+        else:
+            parent_text, child_text = (part.strip() for part in relationship.split(arrow, 1))
+            parent_ids = _DECISION_ID_RE.findall(parent_text)
+            if not parent_text or not child_text:
+                diagnostics.append(
+                    f"{decision_id} must name both sides of its parent → child relationship"
+                )
+            if len(map_order) == 1:
+                if parent_ids:
+                    diagnostics.append(
+                        f"{decision_id} is the hierarchy root and must start from situation or boundary context"
+                    )
+                map_parents[decision_id] = None
+            elif len(parent_ids) != 1:
+                diagnostics.append(
+                    f"{decision_id} must name exactly one existing D-* parent"
+                )
+                map_parents[decision_id] = None
+            else:
+                map_parents[decision_id] = parent_ids[0]
         normalized_status = status.strip().lower()
         if normalized_status not in _ALLOWED_MAP_STATUSES:
             diagnostics.append(
@@ -200,6 +225,20 @@ def validate_project(project_root: str | Path) -> ValidationResult:
             unresolved_status_ids.add(decision_id)
     if not map_ids:
         diagnostics.append("Decision map must contain at least one parent → child entry")
+    elif len(map_order) < 2:
+        diagnostics.append(
+            "Decision map must contain a hierarchy with a context root and at least one descendant"
+        )
+    else:
+        root_id = map_order[0]
+        prior_ids: set[str] = {root_id}
+        for decision_id in map_order[1:]:
+            parent_id = map_parents.get(decision_id)
+            if parent_id and parent_id not in prior_ids:
+                diagnostics.append(
+                    f"{decision_id} parent {parent_id} must reference an earlier connected map decision"
+                )
+            prior_ids.add(decision_id)
     for decision_id in sorted(committed_ids - records.keys()):
         diagnostics.append(f"{decision_id} is committed or validated but has no decision record")
     for decision_id in sorted(records.keys() - map_ids):

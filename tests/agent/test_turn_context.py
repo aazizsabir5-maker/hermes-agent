@@ -267,6 +267,30 @@ def test_inapplicable_finalization_policy_preserves_normal_streaming():
     assert agent.stream_delta_callback == deltas.append
 
 
+def test_enforced_policy_registry_failure_buffers_and_fails_closed(monkeypatch):
+    agent = _FakeAgent()
+    agent.stream_delta_callback = lambda _delta: None
+
+    class BrokenManager:
+        def iter_finalization_policies(self):
+            raise RuntimeError("registry unavailable")
+
+    with (
+        patch("hermes_cli.plugins.get_plugin_manager", return_value=BrokenManager()),
+        patch("agent.runtime_cwd.resolve_context_cwd", return_value="/tmp/project"),
+        patch(
+            "plugins.policies.design_enforcement.decision_enforcement_enabled",
+            return_value=True,
+        ),
+    ):
+        _build(agent, user_message="Finish the design project")
+
+    assert agent._active_finalization_policy_ids == ("design-completion",)
+    assert agent._active_finalization_policies == ()
+    assert agent._finalization_buffering_required is True
+    assert agent.stream_delta_callback is None
+
+
 def test_user_message_preserves_platform_event_timestamp():
     agent = _FakeAgent()
 
