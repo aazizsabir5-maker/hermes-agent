@@ -274,6 +274,7 @@ def test_ready_to_ship_claim_is_validated_but_negated_delivery_is_working_text(t
     for response in (
         "This isn't a final delivery.",
         "We do not claim a final delivery.",
+        "No final delivery is being claimed.",
         "This isn't production-ready.",
     ):
         working = policy.evaluate(_context(tmp_path, response=response))
@@ -297,6 +298,8 @@ def test_supported_claim_cannot_authorize_a_broader_piggyback_claim(tmp_path):
     (
         "The design can now be considered complete.",
         "I consider the design complete.",
+        "I consider this design complete.",
+        "I consider our design complete.",
         "The design is launch-ready.",
     ),
 )

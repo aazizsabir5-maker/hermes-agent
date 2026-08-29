@@ -71,7 +71,7 @@ _COMPLETION_CLAIM_RE = re.compile(
     r"\b(?:is\s+)?ready\s+(?:to ship|for delivery)\b|"
     r"\brequirements\s+(?:are\s+)?satisfied\b|"
     r"\b(?:can now be |may be )?considered complete\b|"
-    r"\b(?:consider|deem|declare|call(?:ing)?)\s+(?:the\s+)?(?:design|project|implementation|work|deliverable|it)\s+(?:to be\s+)?(?:complete|finished|final|ready)\b|"
+    r"\b(?:consider|deem|declare|call(?:ing)?)\s+(?:(?:the|this|that|our|my|your|their|a)\s+)?(?:design|project|implementation|work|deliverable|it)\s+(?:to be\s+)?(?:complete|finished|final|ready)\b|"
     r"\blaunch[- ]ready\b|"
     r"^(?:done|complete|completed|finished|finalized|delivered|shipped)[.!]?$",
     re.IGNORECASE | re.MULTILINE,
@@ -103,7 +103,7 @@ def _completion_claim_fragments(value: str) -> tuple[str, ...]:
         for match in _COMPLETION_CLAIM_RE.finditer(stripped):
             prefix = stripped[max(0, match.start() - 40) : match.start()]
             if re.search(
-                r"(?:\bnot\b|n't\b|\b(?:do|does|did) not claim\b).{0,20}$",
+                r"(?:\bno\b|\bnot\b|n't\b|\b(?:do|does|did) not claim\b).{0,20}$",
                 prefix,
                 re.IGNORECASE,
             ):
