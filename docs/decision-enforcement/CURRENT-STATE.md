@@ -58,14 +58,14 @@ Generic finalization support remains only where the local completion gate uses i
 - disclosed unresolved consequential decisions;
 - fidelity-qualified supported claim and limitations.
 
-The validator checks structural presence, status/record relationships, meaningful alternative syntax or a reason that no credible alternative exists, unresolved-ID disclosure, UTF-8/shape limits, and completion-language qualification. It does not judge private cognition, semantic quality, or factual truth.
+The validator checks structural presence, a situation/boundary-to-intent hierarchy, ordered parent links, traceability of every consequential record to an implementation/realization endpoint, status/record relationships, meaningful alternatives, unresolved-ID disclosure, UTF-8/shape limits, and one exact fidelity/scope-qualified supported claim. It does not judge private cognition, semantic quality, or factual truth.
 
 ## Current footprint
 
 Relative to current `upstream/main` at the implementation checkpoint:
 
 - 17 production/config/script files changed;
-- 1,466 production additions and 11 deletions (net +1,455), excluding tests, docs, and Markdown skill prose;
+- 1,739 production additions and 11 deletions (net +1,728), excluding tests, docs, and Markdown skill prose;
 - one user command: `hermes 1`;
 - zero user-managed stages;
 - one mandatory project artifact: `DESIGN-DECISIONS.md`;
@@ -75,22 +75,24 @@ This is materially smaller than the historical strict fork's 65 changed files an
 
 ## Verification state
 
-Completed during implementation:
+Completed on the final reviewed implementation:
 
 - strict RED→GREEN cycles for launcher/policy, skill contract, validator, migration, and review-found gaps;
-- focused contract suites repeatedly green;
+- final focused contract suite: 14 files, 148 tests passed, 0 failed;
 - relevant core finalization, prompt, plugin, and launcher regressions repaired and rerun;
-- Ruff on changed Python files, compile checks on changed Python directories, and `git diff --check` reported clean in the implementation run.
+- canonical ledger validator: `DESIGN DECISIONS: CONTRACT PASSED`;
+- acceptance harness: one ledger, provisional allowance, unsupported-completion blocking, qualified-completion allowance, restart stability, and plain-mode inactivity all passed;
+- Ruff on changed Python files, compile checks on changed Python directories, and `git diff --check` passed;
+- final independent philosophy/specification and maintainability/code/security reviews passed with no blockers;
+- installed decision skill synchronized exactly to the bundled skill and obsolete comprehensive-protocol files removed;
+- real installed checks passed for `hermes 1 --version`, `hermes 1 tools list`, plain `hermes --version`, invocation-directory preservation, ledger creation, and unsupported-completion blocking.
 
-Still required before publication claim:
+Canonical-suite environmental boundary:
 
-- a clean supervising-agent focused/regression run against the final documentation/ledger commit;
-- one uninterrupted canonical `scripts/run_tests.sh` result, or an honestly recorded environmental blocker;
-- fresh independent philosophy-fidelity and maintainability/code-quality reviews of the final diff, with blocker remediation and re-review;
-- synchronization of the bundled skill and tracked launcher to the explicitly requested installed locations, followed by real launcher checks;
-- fast-forward publication to fork `main`, tag, and obsolete-branch cleanup only after the prior gates pass.
+- The final uninterrupted `scripts/run_tests.sh` attempt was stopped after 2,342 seconds at 21.9% because unrelated tests exhibited severe host-wide timing inflation: 8,298 tests had passed, 7 had failed, many normally short files took 200–600 seconds, and `tests/cron/test_scheduler.py` was killed by its 300-second per-file timeout. This is recorded as an environmental blocker, not a pass.
+- Focused changed-surface and acceptance checks remained green under the same tree; none of the seven observed canonical failures were in the decision-enforcement changed surface.
 
-The implementation agent's canonical parallel attempts were interrupted and left detached workers; those process trees were terminated. They are not recorded as passes.
+Still required before a publication claim: fast-forward fork `main`, push, tag, and delete only obsolete remote branches proven to contain no unique work.
 
 ## Key files
 

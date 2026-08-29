@@ -126,4 +126,4 @@
 
 - Fidelity: Production implementation
 - Supported claim: Production-implementation complete for the maintained fork's local `hermes 1` decision-enforcement path.
-- Known limitations: The structural validator does not judge semantic design quality or evidence truth; completion/applicability detection remains heuristic; universal gateway, cron, ACP, proxy, media, subagent, and tamper-resistant release enforcement are outside scope; publication and installed-copy verification remain pending until the final gates run.
+- Known limitations: The structural validator does not judge semantic design quality or evidence truth; completion/applicability detection remains heuristic; universal gateway, cron, ACP, proxy, media, subagent, and tamper-resistant release enforcement are outside scope; the canonical full repository suite is environmentally blocked and is not claimed as a pass.

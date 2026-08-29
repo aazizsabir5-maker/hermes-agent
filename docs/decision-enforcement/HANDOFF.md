@@ -38,7 +38,7 @@ Non-claims:
 No proof of private cognition, objective design quality, evidence truth, reviewer intelligence, universal tamper-proof delivery, or production readiness beyond stated fidelity.
 
 Current verification boundary:
-Implementation commits and focused RED→GREEN cycles exist. Before a completion/publication claim, rerun final focused and relevant regressions, obtain one uninterrupted canonical suite result or disclose the blocker, run clean static checks, get fresh independent philosophy and maintainability/code reviews, remediate blockers, synchronize installed launcher/profile copies, verify real commands, then publish/merge/tag as Task 10 directs.
+Final focused/relevant regressions, canonical ledger validation, static/compile/whitespace checks, acceptance scenarios, repeated blocker remediation, fresh independent philosophy and maintainability/security reviews, installed skill synchronization, and real installed launcher checks all passed. The canonical full repository suite is not a pass: its final uninterrupted attempt was stopped after 2,342 seconds at 21.9% with 8,298 passes, 7 unrelated failures, 200–600 second file runtimes, and a 300-second scheduler-file timeout. Treat that as the recorded environmental blocker. Publication remains the only release-state operation.
 ```
 
 ## First commands
@@ -71,7 +71,7 @@ Relevant core regressions include finalization policy/gate, turn context/finaliz
 At the implementation checkpoint versus current `upstream/main`:
 
 - 17 production/config/script files;
-- +1,466/-11 production lines, excluding tests/docs/Markdown skill prose;
+- +1,739/-11 production lines (net +1,728), excluding tests/docs/Markdown skill prose;
 - one command;
 - zero user-managed stages;
 - one mandatory project artifact;
@@ -81,11 +81,9 @@ Recompute before publication.
 
 ## Publication order
 
-1. Commit final repository-local context and ledger.
-2. Run focused/relevant/static/canonical checks.
-3. Obtain fresh independent philosophy and maintainability/code reviews.
-4. Remediate every blocker and repeat affected checks/reviews.
-5. Synchronize bundled skill and launcher to the explicitly requested installed paths; verify checksums/content.
-6. Verify `hermes 1 --version`, `hermes 1 tools list`, and plain `hermes --version`.
-7. Fast-forward fork `main`, push, tag the simplified release, and remove obsolete remote feature branches only after confirming no unique work remains.
-8. Record final evidence and update `CURRENT-STATE.md` and `DESIGN-DECISIONS.md` if any result changes the claim.
+1. Re-read live git state and this final evidence before changing release state.
+2. Fast-forward fork `main` to the reviewed correction branch and push.
+3. Tag the simplified release and push the tag.
+4. Delete only obsolete remote feature branches already proven to have no unique work; retain divergent branches for explicit inspection.
+5. Reverify installed `hermes 1 --version` resolves to the published `main` checkout.
+6. Update this handoff only if publication or launcher evidence changes.
