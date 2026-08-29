@@ -71,7 +71,7 @@ _COMPLETION_CLAIM_RE = re.compile(
     r"\b(?:is\s+)?ready\s+(?:to ship|for delivery)\b|"
     r"\brequirements\s+(?:are\s+)?satisfied\b|"
     r"\b(?:can now be |may be )?considered complete\b|"
-    r"\b(?:consider|deem|declare|call(?:ing)?)\s+(?:(?:the|this|that|our|my|your|their|a)\s+)?(?:design|project|implementation|work|deliverable|it)\s+(?:to be\s+)?(?:complete|finished|final|ready)\b|"
+    r"\b(?:consider|deem|declare|call(?:ing)?|regard|view|judge|certify|pronounce|assess|believe|find)\s+(?:(?:the|this|that|our|my|your|their|a)\s+)?(?:design|project|implementation|work|deliverable|it)\s+(?:(?:to be|as)\s+)?(?:complete|finished|final|ready)\b|"
     r"\blaunch[- ]ready\b|"
     r"^(?:done|complete|completed|finished|finalized|delivered|shipped)[.!]?$",
     re.IGNORECASE | re.MULTILINE,
