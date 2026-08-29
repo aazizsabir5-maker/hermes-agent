@@ -103,7 +103,7 @@ def _completion_claim_fragments(value: str) -> tuple[str, ...]:
         for match in _COMPLETION_CLAIM_RE.finditer(stripped):
             prefix = stripped[: match.start()]
             clause_prefix = re.split(
-                r"[:;,.!?]|\b(?:but|however|yet)\b",
+                r"[:;,.!?]|\b(?:but|however|yet|although|though|while|whereas|nevertheless)\b",
                 prefix,
                 flags=re.IGNORECASE,
             )[-1]

@@ -305,6 +305,9 @@ def test_supported_claim_cannot_authorize_a_broader_piggyback_claim(tmp_path):
         "There is no doubt: the design is complete.",
         "No caveat: design is complete.",
         "Nothing about the implementation is complete but the design is complete.",
+        "Nothing about the implementation is complete although the design is complete.",
+        "Neither the implementation nor artifact is complete while the design is complete.",
+        "No part of the implementation is complete though the design is complete.",
         "The design is launch-ready.",
     ),
 )
