@@ -38,7 +38,7 @@ Non-claims:
 No proof of private cognition, objective design quality, evidence truth, reviewer intelligence, universal tamper-proof delivery, or production readiness beyond stated fidelity.
 
 Current verification boundary:
-Final focused/relevant regressions, canonical ledger validation, static/compile/whitespace checks, acceptance scenarios, repeated blocker remediation, fresh independent philosophy and maintainability/security reviews, installed skill synchronization, and real installed launcher checks all passed. The canonical full repository suite is not a pass: its final uninterrupted attempt was stopped after 2,342 seconds at 21.9% with 8,298 passes, 7 unrelated failures, 200–600 second file runtimes, and a 300-second scheduler-file timeout. Treat that as the recorded environmental blocker. Publication remains the only release-state operation.
+Final focused/relevant regressions, canonical ledger validation, static/compile/whitespace checks, acceptance scenarios, repeated blocker remediation, fresh independent philosophy and maintainability/security reviews, installed skill synchronization, and real installed launcher checks all passed. The canonical full repository suite is not a pass: its final uninterrupted attempt was stopped after 2,342 seconds at 21.9% with 8,298 passes, 7 unrelated failures, 200–600 second file runtimes, and a 300-second scheduler-file timeout. Treat that as the recorded environmental blocker. Fork `main` and annotated tag `decision-enforcement-v1` are published; two obsolete design-enforcement branches with zero unique commits were removed.
 ```
 
 ## First commands
@@ -77,13 +77,11 @@ At the implementation checkpoint versus current `upstream/main`:
 - one mandatory project artifact;
 - zero receipt/snapshot runtime directories.
 
-Recompute before publication.
+Computed against the published implementation; documentation-only publication notes do not affect this budget.
 
-## Publication order
+## Published state
 
-1. Re-read live git state and this final evidence before changing release state.
-2. Fast-forward fork `main` to the reviewed correction branch and push.
-3. Tag the simplified release and push the tag.
-4. Delete only obsolete remote feature branches already proven to have no unique work; retain divergent branches for explicit inspection.
-5. Reverify installed `hermes 1 --version` resolves to the published `main` checkout.
-6. Update this handoff only if publication or launcher evidence changes.
+1. Fork `main` was fast-forwarded to the reviewed correction history and pushed.
+2. Annotated tag `decision-enforcement-v1` marks the finalized self-contained release.
+3. Obsolete `feat/fail-closed-design-enforcement` and `fix/design-enforcement-quickstart` remote branches were deleted after zero-unique-commit checks.
+4. Retain divergent branches unless separately inspected; do not infer obsolescence from their names.

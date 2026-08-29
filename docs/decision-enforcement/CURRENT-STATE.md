@@ -92,7 +92,11 @@ Canonical-suite environmental boundary:
 - The final uninterrupted `scripts/run_tests.sh` attempt was stopped after 2,342 seconds at 21.9% because unrelated tests exhibited severe host-wide timing inflation: 8,298 tests had passed, 7 had failed, many normally short files took 200–600 seconds, and `tests/cron/test_scheduler.py` was killed by its 300-second per-file timeout. This is recorded as an environmental blocker, not a pass.
 - Focused changed-surface and acceptance checks remained green under the same tree; none of the seven observed canonical failures were in the decision-enforcement changed surface.
 
-Still required before a publication claim: fast-forward fork `main`, push, tag, and delete only obsolete remote branches proven to contain no unique work.
+Publication state:
+
+- fork `main` was fast-forwarded and pushed;
+- annotated tag `decision-enforcement-v1` was pushed;
+- obsolete `feat/fail-closed-design-enforcement` and `fix/design-enforcement-quickstart` remote branches were deleted only after each reported zero commits unique from published `main`.
 
 ## Key files
 
